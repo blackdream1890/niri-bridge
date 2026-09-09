@@ -18,7 +18,7 @@ def export(data):
         used = [entry['crate'] for entry in group['used_by'] if entry['crate']['name'] != 'niri-bridge']
         if not used:
             continue
-        content = group['text'].strip() + '\n'
+        content = group['text'].replace('\r\n', '\n').replace('\r', '\n').strip() + '\n'
         filename = re.sub('[^A-Za-z0-9.-]', '-', group['id']) + '-' + hashlib.sha256(content.encode()).hexdigest()[:16] + '.txt'
         files[filename] = content
         for crate in used:
