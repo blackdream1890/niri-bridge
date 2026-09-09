@@ -3,6 +3,23 @@
 
 # Local configuration and secrets.
 /.local/
+AGENTS.md
+AGENTS.override.md
+CLAUDE.md
+GEMINI.md
+SKILL.md
+copilot-instructions.md
+.cursorrules
+.windsurfrules
+.codex/
+.claude/
+.cursor/
+.agent/
+.agents/
+.windsurf/
+/.github/instructions/
+/.github/agents/
+/.github/prompts/
 .env
 .env.*
 !.env.example

@@ -4,14 +4,19 @@ Only publish from reviewed source with public commit metadata. Keep private
 configuration, credentials, raw diagnostics and personal build paths out of Git,
 release assets, screenshots and CI artifacts.
 
-## Identity and provenance
+## Source review and licensing
 
-Use the maintainer's GitHub username and GitHub noreply email for release commits.
-Check the complete history with `python3 scripts/check-public.py --history` before
-making a repository public. An existing private repository can contain sensitive
-metadata even when its current tree is clean; retain that history privately and
-prepare a clean publication repository when necessary. Do not merge private
-history back into the public repository.
+Run `python3 scripts/check-public.py --history` and review the committed file list
+and author metadata before publication. Commit attribution should reflect each
+contributor's chosen public identity. GitHub noreply addresses are an option for
+contributors who want email privacy.
+
+Local automation instructions and tool configuration are excluded from project
+source and release archives. The publication check rejects these files in the
+current tree or an archive, including files accidentally added despite ignore
+rules. It still scans historical content for private values and separately
+reports local instruction files that remain in earlier commits. Removing a file
+from the current tree does not remove previous public commits or release assets.
 
 `LICENSE`, `COPYRIGHT`, Cargo metadata and UI notices declare GPL-3.0-or-later.
 `licenses/rust/` retains dependency license texts and upstream attribution.

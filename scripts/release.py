@@ -43,6 +43,7 @@ def main():
     args = parser.parse_args()
     if command('git', 'status', '--porcelain'):
         parser.exit(1, 'Commit and review the source tree before creating release assets.\n')
+    subprocess.run(['python3', '-B', str(ROOT / 'scripts/check-public.py'), '--tree', str(ROOT)], check=True)
     revision = command('git', 'rev-parse', 'HEAD')
     epoch = int(command('git', 'show', '-s', '--format=%ct', 'HEAD'))
     version = tomllib.loads((ROOT / 'Cargo.toml').read_text())['package']['version']

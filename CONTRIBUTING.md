@@ -37,7 +37,9 @@ cargo test --locked --test nested_capture -- --ignored --nocapture
 cargo test --locked --test encrypted_bridge -- --ignored --nocapture --test-threads=1
 ```
 
-Real-device probes require an explicitly agreed testing window. Preserve the current desktop state and restore it after each test.
+Real-device probes temporarily capture input on the selected desktop. Coordinate
+with anyone using it, check the recovery shortcut, and restore the desktop after
+the test.
 
 ## Translations
 
@@ -51,6 +53,13 @@ Include the OS, Niri and application versions, screen scaling and arrangement, i
 
 Use the redacted diagnostics command or the interface's Copy diagnostics action. Do not attach private pairing files, input recordings, subscription URLs, device serials or unreviewed logs. See [Security](SECURITY.md) for sensitive reports.
 
-## Release and privacy conventions
+## Preparing a contribution
 
-Use a GitHub username and noreply email for project commits. Keep private workstation records outside Git and review screenshots before attaching them. The [release procedure](docs/releasing.md) documents the build, checks, source archive and publication process.
+Review the files and author metadata included in your commits. Use the public
+attribution you want associated with your contribution; GitHub offers a noreply
+address if you want to keep your email private. Keep workstation configuration,
+local automation instructions and raw diagnostics outside the contribution.
+Review screenshots before attaching them.
+
+The [release procedure](docs/releasing.md) documents the build, checks, source
+archive and publication process.
