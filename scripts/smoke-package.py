@@ -87,10 +87,28 @@ def main():
         return
     if os.geteuid() != 0 or not args.package:
         parser.error('The package test requires container root and --package.')
-    for _ in range(2):
-        subprocess.run(['dpkg', '--install', str(args.package)], check=True)
-        subprocess.run(['runuser', '-u', 'tester', '--', 'env', 'NIRI_BRIDGE_CI=1', 'GDK_BACKEND=x11',
-                        'xvfb-run', '-a', 'dbus-run-session', '--', 'python3', '-B', str(__file__), '--desktop'], check=True)
+    with tempfile.TemporaryDirectory(prefix='niri-bridge-package-upgrade-') as temporary:
+        root = Path(temporary)
+        tree = root / 'package'
+        subprocess.run(['dpkg-deb', '--raw-extract', str(args.package), str(tree)], check=True)
+        control = tree / 'DEBIAN/control'
+        control.write_text('\n'.join(line + '+ci1' if line.startswith('Version: ') else line
+                                     for line in control.read_text().splitlines()) + '\n')
+        readme = tree / 'usr/lib/niri-bridge/README.md'
+        readme.write_text(readme.read_text() + '\nSynthetic CI upgrade marker.\n')
+        upgrade = root / 'upgrade.deb'
+        subprocess.run(['dpkg-deb', '--build', '--root-owner-group', str(tree), str(upgrade)], check=True)
+        for asset in (args.package, upgrade):
+            subprocess.run(['dpkg', '--install', str(asset)], check=True)
+            subprocess.run(['runuser', '-u', 'tester', '--', 'env', 'NIRI_BRIDGE_CI=1', 'GDK_BACKEND=x11',
+                            'xvfb-run', '-a', 'dbus-run-session', '--', 'python3', '-B', str(__file__), '--desktop'], check=True)
+        subprocess.run(['runuser', '-u', 'tester', '--', 'python3', '-B', '-c', '''
+from pathlib import Path
+home = Path.home()
+readme = home / '.local/share/niri-bridge/docs/README.md'
+assert readme.read_text().endswith('Synthetic CI upgrade marker.\\n')
+assert list((home / '.local/state/niri-bridge/backups').glob('upgrade-*'))
+'''], check=True)
     subprocess.run(['dpkg', '--remove', 'niri-bridge'], check=True)
     subprocess.run(['runuser', '-u', 'tester', '--', 'python3', '-B', '-c', '''
 from pathlib import Path
