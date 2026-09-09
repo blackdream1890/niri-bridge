@@ -1,0 +1,21 @@
+[Unit]
+Description=NiriBridge keyboard and pointer sharing
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/niri-bridge run --config %h/.config/niri-bridge/config.toml
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=4
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=graphical-session.target

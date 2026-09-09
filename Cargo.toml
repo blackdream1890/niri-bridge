@@ -1,0 +1,39 @@
+[package]
+name = "niri-bridge"
+version = "0.2.0-beta.1"
+edition = "2024"
+rust-version = "1.98"
+description = "Bidirectional keyboard and pointer sharing for Niri on Wayland"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/blackdream1890/niri-bridge"
+readme = "README.md"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+toml_edit = "0.25"
+ring = "0.17"
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# Upstream fix for UI_SET_PHYS's pointer-sized ioctl payload; 0.13.2 returns EINVAL.
+evdev = { git = "https://github.com/emberian/evdev", rev = "7fee138a341f73b81b9c4f8c59e3527c6a169ea3" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "signal"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem"] }
+time = "0.3"
+tempfile = "3"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures-util = "0.3"
+
+[dev-dependencies]
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+
+[profile.release]
+strip = "symbols"

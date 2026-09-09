@@ -1,0 +1,18 @@
+name: Feature request
+description: Describe a concrete workflow or improvement
+title: '[Feature]: '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the actual workflow and what currently prevents it.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected behavior
+      description: Explain the interaction you would expect, including the input source and destination when relevant.
+    validations:
+      required: true

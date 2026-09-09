@@ -1,0 +1,1630 @@
+{
+  "generator": "cargo-about 0.9.2",
+  "packages": [
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "anstream",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/rust-cli/anstyle.git",
+      "upstream_notices": [
+        "upstream/anstream-1.0.0/LICENSE-APACHE",
+        "upstream/anstream-1.0.0/LICENSE-MIT"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "anstyle",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/rust-cli/anstyle.git",
+      "upstream_notices": [
+        "upstream/anstyle-1.0.14/LICENSE-APACHE",
+        "upstream/anstyle-1.0.14/LICENSE-MIT"
+      ],
+      "version": "1.0.14"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "anstyle-parse",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/rust-cli/anstyle.git",
+      "upstream_notices": [
+        "upstream/anstyle-parse-1.0.0/LICENSE-APACHE",
+        "upstream/anstyle-parse-1.0.0/LICENSE-MIT"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "anstyle-query",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/rust-cli/anstyle.git",
+      "upstream_notices": [
+        "upstream/anstyle-query-1.1.5/LICENSE-APACHE",
+        "upstream/anstyle-query-1.1.5/LICENSE-MIT"
+      ],
+      "version": "1.1.5"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "anyhow",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/anyhow",
+      "upstream_notices": [
+        "upstream/anyhow-1.0.104/LICENSE-APACHE",
+        "upstream/anyhow-1.0.104/LICENSE-MIT"
+      ],
+      "version": "1.0.104"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "async-broadcast",
+      "notices": [
+        "Apache-2.0-6b286a8c17b82bbc.txt"
+      ],
+      "repository": "https://github.com/smol-rs/async-broadcast",
+      "upstream_notices": [
+        "upstream/async-broadcast-0.7.2/LICENSE-APACHE",
+        "upstream/async-broadcast-0.7.2/LICENSE-MIT"
+      ],
+      "version": "0.7.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "async-recursion",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/dcchut/async-recursion",
+      "upstream_notices": [
+        "upstream/async-recursion-1.1.1/LICENSE-APACHE",
+        "upstream/async-recursion-1.1.1/LICENSE-MIT"
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "async-trait",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/async-trait",
+      "upstream_notices": [
+        "upstream/async-trait-0.1.92/LICENSE-APACHE",
+        "upstream/async-trait-0.1.92/LICENSE-MIT"
+      ],
+      "version": "0.1.92"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "base64",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/marshallpierce/rust-base64",
+      "upstream_notices": [
+        "upstream/base64-0.23.1/LICENSE-APACHE",
+        "upstream/base64-0.23.1/LICENSE-MIT"
+      ],
+      "version": "0.23.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "bitflags",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/bitflags/bitflags",
+      "upstream_notices": [
+        "upstream/bitflags-2.13.1/LICENSE-APACHE",
+        "upstream/bitflags-2.13.1/LICENSE-MIT"
+      ],
+      "version": "2.13.1"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "bitvec",
+      "notices": [
+        "MIT-411781fd38700f23.txt"
+      ],
+      "repository": "https://github.com/bitvecto-rs/bitvec",
+      "upstream_notices": [
+        "upstream/bitvec-1.1.1/LICENSE.txt"
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "bytes",
+      "notices": [
+        "MIT-45f522cacecb1023.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/bytes",
+      "upstream_notices": [
+        "upstream/bytes-1.12.1/LICENSE"
+      ],
+      "version": "1.12.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "cc",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/cc-rs",
+      "upstream_notices": [
+        "upstream/cc-1.4.5/LICENSE-APACHE",
+        "upstream/cc-1.4.5/LICENSE-MIT"
+      ],
+      "version": "1.4.5"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "cfg-if",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/cfg-if",
+      "upstream_notices": [
+        "upstream/cfg-if-1.0.4/LICENSE-APACHE",
+        "upstream/cfg-if-1.0.4/LICENSE-MIT"
+      ],
+      "version": "1.0.4"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "cfg_aliases",
+      "notices": [
+        "MIT-1e2b7ade3fb22813.txt",
+        "MIT-31b94860253d8ec7.txt"
+      ],
+      "repository": "https://github.com/katharostech/cfg_aliases",
+      "upstream_notices": [
+        "upstream/cfg_aliases-0.2.2/LICENSE",
+        "upstream/cfg_aliases-0.2.2/NOTICES.md"
+      ],
+      "version": "0.2.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "clap",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/clap-rs/clap",
+      "upstream_notices": [
+        "upstream/clap-4.6.6/LICENSE-APACHE",
+        "upstream/clap-4.6.6/LICENSE-MIT"
+      ],
+      "version": "4.6.6"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "clap_builder",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/clap-rs/clap",
+      "upstream_notices": [
+        "upstream/clap_builder-4.6.6/LICENSE-APACHE",
+        "upstream/clap_builder-4.6.6/LICENSE-MIT"
+      ],
+      "version": "4.6.6"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "clap_derive",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/clap-rs/clap",
+      "upstream_notices": [
+        "upstream/clap_derive-4.6.4/LICENSE-APACHE",
+        "upstream/clap_derive-4.6.4/LICENSE-MIT"
+      ],
+      "version": "4.6.4"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "clap_lex",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/clap-rs/clap",
+      "upstream_notices": [
+        "upstream/clap_lex-1.1.0/LICENSE-APACHE",
+        "upstream/clap_lex-1.1.0/LICENSE-MIT"
+      ],
+      "version": "1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "colorchoice",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/rust-cli/anstyle.git",
+      "upstream_notices": [
+        "upstream/colorchoice-1.0.5/LICENSE-APACHE",
+        "upstream/colorchoice-1.0.5/LICENSE-MIT"
+      ],
+      "version": "1.0.5"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "deranged",
+      "notices": [
+        "Apache-2.0-8502aec5e5641474.txt"
+      ],
+      "repository": "https://github.com/jhpratt/deranged",
+      "upstream_notices": [
+        "upstream/deranged-0.5.8/LICENSE-Apache",
+        "upstream/deranged-0.5.8/LICENSE-MIT"
+      ],
+      "version": "0.5.8"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "downcast-rs",
+      "notices": [
+        "Apache-2.0-af975c9737b3bdcd.txt"
+      ],
+      "repository": "https://github.com/marcianx/downcast-rs",
+      "upstream_notices": [
+        "upstream/downcast-rs-1.2.1/LICENSE-APACHE",
+        "upstream/downcast-rs-1.2.1/LICENSE-MIT"
+      ],
+      "version": "1.2.1"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "endi",
+      "notices": [
+        "MIT-23f18e03dc49df91.txt"
+      ],
+      "repository": "https://github.com/zeenix/endi",
+      "upstream_notices": [
+        "upstream/endi-1.1.1/LICENSE-MIT"
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "enumflags2",
+      "notices": [
+        "Apache-2.0-41ba8a366e4129d0.txt"
+      ],
+      "repository": "https://github.com/meithecatte/enumflags2",
+      "upstream_notices": [
+        "upstream/enumflags2-0.7.12/LICENSE-APACHE",
+        "upstream/enumflags2-0.7.12/LICENSE-MIT"
+      ],
+      "version": "0.7.12"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "enumflags2_derive",
+      "notices": [
+        "Apache-2.0-68d7c3ae5b131ec5.txt"
+      ],
+      "repository": "https://github.com/meithecatte/enumflags2",
+      "upstream_notices": [
+        "upstream/enumflags2_derive-0.7.12/LICENSE-APACHE",
+        "upstream/enumflags2_derive-0.7.12/LICENSE-MIT"
+      ],
+      "version": "0.7.12"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "equivalent",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/indexmap-rs/equivalent",
+      "upstream_notices": [
+        "upstream/equivalent-1.0.2/LICENSE-APACHE",
+        "upstream/equivalent-1.0.2/LICENSE-MIT"
+      ],
+      "version": "1.0.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "errno",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/lambda-fairy/rust-errno",
+      "upstream_notices": [
+        "upstream/errno-0.3.14/LICENSE-APACHE",
+        "upstream/errno-0.3.14/LICENSE-MIT"
+      ],
+      "version": "0.3.14"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "evdev",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/cmr/evdev",
+      "upstream_notices": [
+        "upstream/evdev-0.13.2/LICENSE-APACHE",
+        "upstream/evdev-0.13.2/LICENSE-MIT"
+      ],
+      "version": "0.13.2"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "event-listener",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/smol-rs/event-listener",
+      "upstream_notices": [
+        "upstream/event-listener-5.4.2/LICENSE-APACHE",
+        "upstream/event-listener-5.4.2/LICENSE-MIT"
+      ],
+      "version": "5.4.2"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "event-listener-strategy",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/smol-rs/event-listener-strategy",
+      "upstream_notices": [
+        "upstream/event-listener-strategy-0.5.4/LICENSE-APACHE",
+        "upstream/event-listener-strategy-0.5.4/LICENSE-MIT"
+      ],
+      "version": "0.5.4"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "fastrand",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/smol-rs/fastrand",
+      "upstream_notices": [
+        "upstream/fastrand-2.5.0/LICENSE-APACHE",
+        "upstream/fastrand-2.5.0/LICENSE-MIT"
+      ],
+      "version": "2.5.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "find-msvc-tools",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/cc-rs",
+      "upstream_notices": [
+        "upstream/find-msvc-tools-0.1.12/LICENSE-APACHE",
+        "upstream/find-msvc-tools-0.1.12/LICENSE-MIT"
+      ],
+      "version": "0.1.12"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "funty",
+      "notices": [
+        "MIT-f790cc576999f599.txt"
+      ],
+      "repository": "https://github.com/myrrlyn/funty",
+      "upstream_notices": [
+        "upstream/funty-2.0.0/LICENSE.txt"
+      ],
+      "version": "2.0.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "futures-core",
+      "notices": [
+        "Apache-2.0-8337133fbd3cd6b5.txt"
+      ],
+      "repository": "https://github.com/rust-lang/futures-rs",
+      "upstream_notices": [
+        "upstream/futures-core-0.3.34/LICENSE-APACHE",
+        "upstream/futures-core-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "futures-io",
+      "notices": [
+        "Apache-2.0-8337133fbd3cd6b5.txt"
+      ],
+      "repository": "https://github.com/rust-lang/futures-rs",
+      "upstream_notices": [
+        "upstream/futures-io-0.3.34/LICENSE-APACHE",
+        "upstream/futures-io-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "futures-lite",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/smol-rs/futures-lite",
+      "upstream_notices": [
+        "upstream/futures-lite-2.6.1/LICENSE-APACHE",
+        "upstream/futures-lite-2.6.1/LICENSE-MIT",
+        "upstream/futures-lite-2.6.1/LICENSE-THIRD-PARTY"
+      ],
+      "version": "2.6.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "futures-macro",
+      "notices": [
+        "Apache-2.0-8337133fbd3cd6b5.txt"
+      ],
+      "repository": "https://github.com/rust-lang/futures-rs",
+      "upstream_notices": [
+        "upstream/futures-macro-0.3.34/LICENSE-APACHE",
+        "upstream/futures-macro-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "futures-task",
+      "notices": [
+        "Apache-2.0-8337133fbd3cd6b5.txt"
+      ],
+      "repository": "https://github.com/rust-lang/futures-rs",
+      "upstream_notices": [
+        "upstream/futures-task-0.3.34/LICENSE-APACHE",
+        "upstream/futures-task-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "futures-util",
+      "notices": [
+        "Apache-2.0-8337133fbd3cd6b5.txt"
+      ],
+      "repository": "https://github.com/rust-lang/futures-rs",
+      "upstream_notices": [
+        "upstream/futures-util-0.3.34/LICENSE-APACHE",
+        "upstream/futures-util-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "notices": [
+        "Apache-2.0-228e99750197fe32.txt"
+      ],
+      "repository": "https://github.com/rust-random/getrandom",
+      "upstream_notices": [
+        "upstream/getrandom-0.2.17/LICENSE-APACHE",
+        "upstream/getrandom-0.2.17/LICENSE-MIT"
+      ],
+      "version": "0.2.17"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "getrandom",
+      "notices": [
+        "Apache-2.0-228e99750197fe32.txt"
+      ],
+      "repository": "https://github.com/rust-random/getrandom",
+      "upstream_notices": [
+        "upstream/getrandom-0.4.3/LICENSE-APACHE",
+        "upstream/getrandom-0.4.3/LICENSE-MIT"
+      ],
+      "version": "0.4.3"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "hashbrown",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/hashbrown",
+      "upstream_notices": [
+        "upstream/hashbrown-0.17.1/LICENSE-APACHE",
+        "upstream/hashbrown-0.17.1/LICENSE-MIT"
+      ],
+      "version": "0.17.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "heck",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/withoutboats/heck",
+      "upstream_notices": [
+        "upstream/heck-0.5.0/LICENSE-APACHE",
+        "upstream/heck-0.5.0/LICENSE-MIT"
+      ],
+      "version": "0.5.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "hex",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/KokaKiwi/rust-hex",
+      "upstream_notices": [
+        "upstream/hex-0.4.3/LICENSE-APACHE",
+        "upstream/hex-0.4.3/LICENSE-MIT"
+      ],
+      "version": "0.4.3"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "indexmap",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/indexmap-rs/indexmap",
+      "upstream_notices": [
+        "upstream/indexmap-2.14.2/LICENSE-APACHE",
+        "upstream/indexmap-2.14.2/LICENSE-MIT"
+      ],
+      "version": "2.14.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "is_terminal_polyfill",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/polyfill-rs/is_terminal_polyfill",
+      "upstream_notices": [
+        "upstream/is_terminal_polyfill-1.70.2/LICENSE-APACHE",
+        "upstream/is_terminal_polyfill-1.70.2/LICENSE-MIT"
+      ],
+      "version": "1.70.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "itoa",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/itoa",
+      "upstream_notices": [
+        "upstream/itoa-1.0.18/LICENSE-APACHE",
+        "upstream/itoa-1.0.18/LICENSE-MIT"
+      ],
+      "version": "1.0.18"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "libc",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/libc",
+      "upstream_notices": [
+        "upstream/libc-0.2.189/LICENSE-APACHE",
+        "upstream/libc-0.2.189/LICENSE-MIT"
+      ],
+      "version": "0.2.189"
+    },
+    {
+      "declared_license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "linux-raw-sys",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt",
+        "Apache-2.0-ae6e99144a735503.txt"
+      ],
+      "repository": "https://github.com/sunfishcode/linux-raw-sys",
+      "upstream_notices": [
+        "upstream/linux-raw-sys-0.12.1/COPYRIGHT",
+        "upstream/linux-raw-sys-0.12.1/LICENSE-APACHE",
+        "upstream/linux-raw-sys-0.12.1/LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "upstream/linux-raw-sys-0.12.1/LICENSE-MIT"
+      ],
+      "version": "0.12.1"
+    },
+    {
+      "declared_license": "Unlicense OR MIT",
+      "name": "memchr",
+      "notices": [
+        "MIT-0f96a83840e146e4.txt"
+      ],
+      "repository": "https://github.com/BurntSushi/memchr",
+      "upstream_notices": [
+        "upstream/memchr-2.8.3/COPYING",
+        "upstream/memchr-2.8.3/LICENSE-MIT"
+      ],
+      "version": "2.8.3"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "mio",
+      "notices": [
+        "MIT-07919255c7e04793.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/mio",
+      "upstream_notices": [
+        "upstream/mio-1.2.3/LICENSE"
+      ],
+      "version": "1.2.3"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "nix",
+      "notices": [
+        "MIT-66e3ee1fa7f909ad.txt"
+      ],
+      "repository": "https://github.com/nix-rust/nix",
+      "upstream_notices": [
+        "upstream/nix-0.29.0/LICENSE"
+      ],
+      "version": "0.29.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "num-conv",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/jhpratt/num-conv",
+      "upstream_notices": [
+        "upstream/num-conv-0.2.2/LICENSE-Apache",
+        "upstream/num-conv-0.2.2/LICENSE-MIT"
+      ],
+      "version": "0.2.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "once_cell",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/matklad/once_cell",
+      "upstream_notices": [
+        "upstream/once_cell-1.21.4/LICENSE-APACHE",
+        "upstream/once_cell-1.21.4/LICENSE-MIT"
+      ],
+      "version": "1.21.4"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "ordered-stream",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/danieldg/ordered-stream",
+      "upstream_notices": [
+        "upstream/ordered-stream-0.2.0/LICENSE-APACHE",
+        "upstream/ordered-stream-0.2.0/LICENSE-MIT"
+      ],
+      "version": "0.2.0"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "parking",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/smol-rs/parking",
+      "upstream_notices": [
+        "upstream/parking-2.2.1/LICENSE-APACHE",
+        "upstream/parking-2.2.1/LICENSE-MIT",
+        "upstream/parking-2.2.1/LICENSE-THIRD-PARTY"
+      ],
+      "version": "2.2.1"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "pem",
+      "notices": [
+        "MIT-b7c76ff4466a3aeb.txt"
+      ],
+      "repository": "https://github.com/jcreekmore/pem-rs.git",
+      "upstream_notices": [
+        "upstream/pem-4.0.0/LICENSE.md"
+      ],
+      "version": "4.0.0"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "pin-project-lite",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/taiki-e/pin-project-lite",
+      "upstream_notices": [
+        "upstream/pin-project-lite-0.2.17/LICENSE-APACHE",
+        "upstream/pin-project-lite-0.2.17/LICENSE-MIT"
+      ],
+      "version": "0.2.17"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "pkg-config",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/pkg-config-rs",
+      "upstream_notices": [
+        "upstream/pkg-config-0.3.34/LICENSE-APACHE",
+        "upstream/pkg-config-0.3.34/LICENSE-MIT"
+      ],
+      "version": "0.3.34"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "powerfmt",
+      "notices": [
+        "Apache-2.0-195928f85a6d2b9a.txt"
+      ],
+      "repository": "https://github.com/jhpratt/powerfmt",
+      "upstream_notices": [
+        "upstream/powerfmt-0.2.0/LICENSE-Apache",
+        "upstream/powerfmt-0.2.0/LICENSE-MIT"
+      ],
+      "version": "0.2.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "proc-macro-crate",
+      "notices": [
+        "Apache-2.0-56a24963c5251611.txt"
+      ],
+      "repository": "https://github.com/bkchr/proc-macro-crate",
+      "upstream_notices": [
+        "upstream/proc-macro-crate-3.5.0/LICENSE-APACHE",
+        "upstream/proc-macro-crate-3.5.0/LICENSE-MIT"
+      ],
+      "version": "3.5.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/proc-macro2",
+      "upstream_notices": [
+        "upstream/proc-macro2-1.0.107/LICENSE-APACHE",
+        "upstream/proc-macro2-1.0.107/LICENSE-MIT"
+      ],
+      "version": "1.0.107"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "quick-xml",
+      "notices": [
+        "MIT-a18a673046684994.txt"
+      ],
+      "repository": "https://github.com/tafia/quick-xml",
+      "upstream_notices": [
+        "upstream/quick-xml-0.41.0/LICENSE-MIT.md"
+      ],
+      "version": "0.41.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "quote",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/quote",
+      "upstream_notices": [
+        "upstream/quote-1.0.47/LICENSE-APACHE",
+        "upstream/quote-1.0.47/LICENSE-MIT"
+      ],
+      "version": "1.0.47"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "radium",
+      "notices": [
+        "MIT-13f4cc9fbc8d4a44.txt"
+      ],
+      "repository": "https://github.com/bitvecto-rs/radium",
+      "upstream_notices": [
+        "upstream/radium-0.7.0/LICENSE.txt"
+      ],
+      "version": "0.7.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "rcgen",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/rustls/rcgen",
+      "upstream_notices": [
+        "upstream/rcgen-0.14.10/LICENSE"
+      ],
+      "version": "0.14.10"
+    },
+    {
+      "declared_license": "Apache-2.0 AND ISC",
+      "name": "ring",
+      "notices": [
+        "Apache-2.0-0d872bb685969646.txt",
+        "Apache-2.0-143368af9701a24e.txt",
+        "ISC-01b7f21eb84b2bf3.txt",
+        "ISC-0caed62cd744cf1a.txt",
+        "ISC-11e186cc07b445d0.txt",
+        "ISC-209b3cb860fcf5ee.txt",
+        "ISC-2613bdbadb258d99.txt",
+        "ISC-2c1631c98c8ff5a3.txt",
+        "ISC-2c5791daa813a98b.txt",
+        "ISC-440c891a53710f32.txt",
+        "ISC-7283a6f5f6a7a69f.txt",
+        "ISC-7aeb84e1d64b1018.txt",
+        "ISC-834affb61a8d930b.txt",
+        "ISC-a00f81158f7fcb1c.txt",
+        "ISC-b1b5060b07ca9713.txt",
+        "ISC-d371541e71a20753.txt",
+        "ISC-f025ccfb7dfb6bdf.txt",
+        "ISC-f968c293be424b92.txt"
+      ],
+      "repository": "https://github.com/briansmith/ring",
+      "upstream_notices": [
+        "upstream/ring-0.17.14/LICENSE",
+        "upstream/ring-0.17.14/LICENSE-BoringSSL",
+        "upstream/ring-0.17.14/LICENSE-other-bits",
+        "upstream/ring-0.17.14/src/polyfill/once_cell/LICENSE-APACHE",
+        "upstream/ring-0.17.14/src/polyfill/once_cell/LICENSE-MIT",
+        "upstream/ring-0.17.14/third_party/fiat/LICENSE"
+      ],
+      "version": "0.17.14"
+    },
+    {
+      "declared_license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "name": "rustix",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt",
+        "Apache-2.0-ae6e99144a735503.txt"
+      ],
+      "repository": "https://github.com/bytecodealliance/rustix",
+      "upstream_notices": [
+        "upstream/rustix-1.1.4/COPYRIGHT",
+        "upstream/rustix-1.1.4/LICENSE-APACHE",
+        "upstream/rustix-1.1.4/LICENSE-Apache-2.0_WITH_LLVM-exception",
+        "upstream/rustix-1.1.4/LICENSE-MIT"
+      ],
+      "version": "1.1.4"
+    },
+    {
+      "declared_license": "Apache-2.0 OR ISC OR MIT",
+      "name": "rustls",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rustls/rustls",
+      "upstream_notices": [
+        "upstream/rustls-0.23.44/LICENSE-APACHE",
+        "upstream/rustls-0.23.44/LICENSE-ISC",
+        "upstream/rustls-0.23.44/LICENSE-MIT"
+      ],
+      "version": "0.23.44"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "rustls-pki-types",
+      "notices": [
+        "Apache-2.0-c12c816484f26d7d.txt"
+      ],
+      "repository": "https://github.com/rustls/pki-types",
+      "upstream_notices": [
+        "upstream/rustls-pki-types-1.15.1/LICENSE-APACHE",
+        "upstream/rustls-pki-types-1.15.1/LICENSE-MIT"
+      ],
+      "version": "1.15.1"
+    },
+    {
+      "declared_license": "ISC",
+      "name": "rustls-webpki",
+      "notices": [
+        "ISC-5b698ca13897be3a.txt"
+      ],
+      "repository": "https://github.com/rustls/webpki",
+      "upstream_notices": [
+        "upstream/rustls-webpki-0.103.15/LICENSE"
+      ],
+      "version": "0.103.15"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/serde-rs/serde",
+      "upstream_notices": [
+        "upstream/serde-1.0.229/LICENSE-APACHE",
+        "upstream/serde-1.0.229/LICENSE-MIT"
+      ],
+      "version": "1.0.229"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde_core",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/serde-rs/serde",
+      "upstream_notices": [
+        "upstream/serde_core-1.0.229/LICENSE-APACHE",
+        "upstream/serde_core-1.0.229/LICENSE-MIT"
+      ],
+      "version": "1.0.229"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde_derive",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/serde-rs/serde",
+      "upstream_notices": [
+        "upstream/serde_derive-1.0.229/LICENSE-APACHE",
+        "upstream/serde_derive-1.0.229/LICENSE-MIT"
+      ],
+      "version": "1.0.229"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde_json",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/serde-rs/json",
+      "upstream_notices": [
+        "upstream/serde_json-1.0.151/LICENSE-APACHE",
+        "upstream/serde_json-1.0.151/LICENSE-MIT"
+      ],
+      "version": "1.0.151"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde_repr",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/serde-repr",
+      "upstream_notices": [
+        "upstream/serde_repr-0.1.21/LICENSE-APACHE",
+        "upstream/serde_repr-0.1.21/LICENSE-MIT"
+      ],
+      "version": "0.1.21"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "serde_spanned",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/serde_spanned-1.1.1/LICENSE-APACHE",
+        "upstream/serde_spanned-1.1.1/LICENSE-MIT"
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "shlex",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/comex/rust-shlex",
+      "upstream_notices": [
+        "upstream/shlex-2.0.1/LICENSE-APACHE",
+        "upstream/shlex-2.0.1/LICENSE-MIT"
+      ],
+      "version": "2.0.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "signal-hook-registry",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/vorner/signal-hook",
+      "upstream_notices": [
+        "upstream/signal-hook-registry-1.4.8/LICENSE-APACHE",
+        "upstream/signal-hook-registry-1.4.8/LICENSE-MIT"
+      ],
+      "version": "1.4.8"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "slab",
+      "notices": [
+        "MIT-8ce0830173fdac60.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/slab",
+      "upstream_notices": [
+        "upstream/slab-0.4.12/LICENSE"
+      ],
+      "version": "0.4.12"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "smallvec",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/servo/rust-smallvec",
+      "upstream_notices": [
+        "upstream/smallvec-1.16.0/LICENSE-APACHE",
+        "upstream/smallvec-1.16.0/LICENSE-MIT"
+      ],
+      "version": "1.16.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "socket2",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/rust-lang/socket2",
+      "upstream_notices": [
+        "upstream/socket2-0.6.5/LICENSE-APACHE",
+        "upstream/socket2-0.6.5/LICENSE-MIT"
+      ],
+      "version": "0.6.5"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "strsim",
+      "notices": [
+        "MIT-1e697ce8d21401fb.txt"
+      ],
+      "repository": "https://github.com/rapidfuzz/strsim-rs",
+      "upstream_notices": [
+        "upstream/strsim-0.11.1/LICENSE"
+      ],
+      "version": "0.11.1"
+    },
+    {
+      "declared_license": "BSD-3-Clause",
+      "name": "subtle",
+      "notices": [
+        "BSD-3-Clause-cc0332a88c2ea21d.txt"
+      ],
+      "repository": "https://github.com/dalek-cryptography/subtle",
+      "upstream_notices": [
+        "upstream/subtle-2.6.1/LICENSE"
+      ],
+      "version": "2.6.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/syn",
+      "upstream_notices": [
+        "upstream/syn-2.0.119/LICENSE-APACHE",
+        "upstream/syn-2.0.119/LICENSE-MIT"
+      ],
+      "version": "2.0.119"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "syn",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/dtolnay/syn",
+      "upstream_notices": [
+        "upstream/syn-3.0.5/LICENSE-APACHE",
+        "upstream/syn-3.0.5/LICENSE-MIT"
+      ],
+      "version": "3.0.5"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tap",
+      "notices": [
+        "MIT-8b4e95f5cf0dc402.txt"
+      ],
+      "repository": "https://github.com/myrrlyn/tap",
+      "upstream_notices": [
+        "upstream/tap-1.0.1/LICENSE.txt"
+      ],
+      "version": "1.0.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "tempfile",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/Stebalien/tempfile",
+      "upstream_notices": [
+        "upstream/tempfile-3.27.0/LICENSE-APACHE",
+        "upstream/tempfile-3.27.0/LICENSE-MIT"
+      ],
+      "version": "3.27.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "time",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/time-rs/time",
+      "upstream_notices": [
+        "upstream/time-0.3.55/LICENSE-Apache",
+        "upstream/time-0.3.55/LICENSE-MIT"
+      ],
+      "version": "0.3.55"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "time-core",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/time-rs/time",
+      "upstream_notices": [
+        "upstream/time-core-0.1.9/LICENSE-Apache",
+        "upstream/time-core-0.1.9/LICENSE-MIT"
+      ],
+      "version": "0.1.9"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tokio",
+      "notices": [
+        "MIT-253cd04c6714889d.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/tokio",
+      "upstream_notices": [
+        "upstream/tokio-1.53.1/LICENSE"
+      ],
+      "version": "1.53.1"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tokio-macros",
+      "notices": [
+        "MIT-0b83dc40cba89b99.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/tokio",
+      "upstream_notices": [
+        "upstream/tokio-macros-2.7.2/LICENSE"
+      ],
+      "version": "2.7.2"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "tokio-rustls",
+      "notices": [
+        "Apache-2.0-aacc68583a2ebef0.txt"
+      ],
+      "repository": "https://github.com/rustls/tokio-rustls",
+      "upstream_notices": [
+        "upstream/tokio-rustls-0.26.5/LICENSE-APACHE",
+        "upstream/tokio-rustls-0.26.5/LICENSE-MIT"
+      ],
+      "version": "0.26.5"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml-0.9.12+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml-0.9.12+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "0.9.12+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml_datetime",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml_datetime-0.7.5+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml_datetime-0.7.5+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "0.7.5+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml_datetime",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml_datetime-1.1.1+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml_datetime-1.1.1+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "1.1.1+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml_edit",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml_edit-0.25.13+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml_edit-0.25.13+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "0.25.13+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml_parser",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml_parser-1.1.3+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml_parser-1.1.3+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "1.1.3+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "toml_writer",
+      "notices": [
+        "Apache-2.0-a8ad31b1c3f40dca.txt"
+      ],
+      "repository": "https://github.com/toml-rs/toml",
+      "upstream_notices": [
+        "upstream/toml_writer-1.1.2+spec-1.1.0/LICENSE-APACHE",
+        "upstream/toml_writer-1.1.2+spec-1.1.0/LICENSE-MIT"
+      ],
+      "version": "1.1.2+spec-1.1.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tracing",
+      "notices": [
+        "MIT-898b1ae9821e98da.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/tracing",
+      "upstream_notices": [
+        "upstream/tracing-0.1.44/LICENSE"
+      ],
+      "version": "0.1.44"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tracing-attributes",
+      "notices": [
+        "MIT-898b1ae9821e98da.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/tracing",
+      "upstream_notices": [
+        "upstream/tracing-attributes-0.1.31/LICENSE"
+      ],
+      "version": "0.1.31"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "tracing-core",
+      "notices": [
+        "MIT-58545fed1565e42d.txt",
+        "MIT-898b1ae9821e98da.txt"
+      ],
+      "repository": "https://github.com/tokio-rs/tracing",
+      "upstream_notices": [
+        "upstream/tracing-core-0.1.36/LICENSE",
+        "upstream/tracing-core-0.1.36/src/spin/LICENSE"
+      ],
+      "version": "0.1.36"
+    },
+    {
+      "declared_license": "(MIT OR Apache-2.0) AND Unicode-3.0",
+      "name": "unicode-ident",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt",
+        "Unicode-3.0-f7db81051789b729.txt"
+      ],
+      "repository": "https://github.com/dtolnay/unicode-ident",
+      "upstream_notices": [
+        "upstream/unicode-ident-1.0.24/LICENSE-APACHE",
+        "upstream/unicode-ident-1.0.24/LICENSE-MIT",
+        "upstream/unicode-ident-1.0.24/LICENSE-UNICODE"
+      ],
+      "version": "1.0.24"
+    },
+    {
+      "declared_license": "ISC",
+      "name": "untrusted",
+      "notices": [
+        "ISC-7abd9b6960dcf7d4.txt"
+      ],
+      "repository": "https://github.com/briansmith/untrusted",
+      "upstream_notices": [
+        "upstream/untrusted-0.9.0/LICENSE.txt"
+      ],
+      "version": "0.9.0"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "utf8parse",
+      "notices": [
+        "Apache-2.0-074e6e32c86a4c0e.txt"
+      ],
+      "repository": "https://github.com/alacritty/vte",
+      "upstream_notices": [
+        "upstream/utf8parse-0.2.2/LICENSE-APACHE",
+        "upstream/utf8parse-0.2.2/LICENSE-MIT"
+      ],
+      "version": "0.2.2"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "uuid",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/uuid-rs/uuid",
+      "upstream_notices": [
+        "upstream/uuid-1.26.0/LICENSE-APACHE",
+        "upstream/uuid-1.26.0/LICENSE-MIT"
+      ],
+      "version": "1.26.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-backend",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-backend-0.3.17/LICENSE.txt"
+      ],
+      "version": "0.3.17"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-client",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-client-0.31.15/LICENSE.txt"
+      ],
+      "version": "0.31.15"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-protocols",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt",
+        "MIT-f1a2b233e8a9a71c.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-protocols-0.32.13/LICENSE.txt",
+        "upstream/wayland-protocols-0.32.13/protocols/COPYING"
+      ],
+      "version": "0.32.13"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-protocols-wlr",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-protocols-wlr-0.3.12/LICENSE.txt"
+      ],
+      "version": "0.3.12"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-scanner",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-scanner-0.31.11/LICENSE.txt"
+      ],
+      "version": "0.31.11"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wayland-sys",
+      "notices": [
+        "MIT-1cb6f4dee8c649f1.txt"
+      ],
+      "repository": "https://github.com/smithay/wayland-rs",
+      "upstream_notices": [
+        "upstream/wayland-sys-0.31.11/LICENSE.txt"
+      ],
+      "version": "0.31.11"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "winnow",
+      "notices": [
+        "MIT-cb5aedb296c5246d.txt"
+      ],
+      "repository": "https://github.com/winnow-rs/winnow",
+      "upstream_notices": [
+        "upstream/winnow-0.7.15/LICENSE-MIT"
+      ],
+      "version": "0.7.15"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "winnow",
+      "notices": [
+        "MIT-cb5aedb296c5246d.txt"
+      ],
+      "repository": "https://github.com/winnow-rs/winnow",
+      "upstream_notices": [
+        "upstream/winnow-1.0.4/LICENSE-MIT"
+      ],
+      "version": "1.0.4"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "wyz",
+      "notices": [
+        "MIT-411781fd38700f23.txt"
+      ],
+      "repository": "https://github.com/myrrlyn/wyz",
+      "upstream_notices": [
+        "upstream/wyz-0.5.1/LICENSE.txt"
+      ],
+      "version": "0.5.1"
+    },
+    {
+      "declared_license": "MIT OR Apache-2.0",
+      "name": "yasna",
+      "notices": [
+        "Apache-2.0-143368af9701a24e.txt"
+      ],
+      "repository": "https://github.com/qnighy/yasna.rs",
+      "upstream_notices": [
+        "upstream/yasna-0.6.0/LICENSE-APACHE",
+        "upstream/yasna-0.6.0/LICENSE-MIT"
+      ],
+      "version": "0.6.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zbus",
+      "notices": [
+        "MIT-260e4ff3fc493695.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zbus-5.19.0/LICENSE"
+      ],
+      "version": "5.19.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zbus_macros",
+      "notices": [
+        "MIT-260e4ff3fc493695.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zbus_macros-5.19.0/LICENSE"
+      ],
+      "version": "5.19.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zbus_names",
+      "notices": [
+        "MIT-260e4ff3fc493695.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zbus_names-4.3.4/LICENSE"
+      ],
+      "version": "4.3.4"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zcheapstr",
+      "notices": [
+        "MIT-59871bb1612f8a05.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zcheapstr/",
+      "upstream_notices": [
+        "upstream/zcheapstr-1.1.0/LICENSE"
+      ],
+      "version": "1.1.0"
+    },
+    {
+      "declared_license": "Apache-2.0 OR MIT",
+      "name": "zeroize",
+      "notices": [
+        "Apache-2.0-50e6751797c50ded.txt"
+      ],
+      "repository": "https://github.com/RustCrypto/utils",
+      "upstream_notices": [
+        "upstream/zeroize-1.9.0/LICENSE-APACHE",
+        "upstream/zeroize-1.9.0/LICENSE-MIT"
+      ],
+      "version": "1.9.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zmij",
+      "notices": [
+        "MIT-23f18e03dc49df91.txt"
+      ],
+      "repository": "https://github.com/dtolnay/zmij",
+      "upstream_notices": [
+        "upstream/zmij-1.0.23/LICENSE-MIT"
+      ],
+      "version": "1.0.23"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zvariant",
+      "notices": [
+        "MIT-260e4ff3fc493695.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zvariant-5.15.0/LICENSE"
+      ],
+      "version": "5.15.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zvariant_derive",
+      "notices": [
+        "MIT-260e4ff3fc493695.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zvariant_derive-5.15.0/LICENSE"
+      ],
+      "version": "5.15.0"
+    },
+    {
+      "declared_license": "MIT",
+      "name": "zvariant_utils",
+      "notices": [
+        "MIT-23f18e03dc49df91.txt"
+      ],
+      "repository": "https://github.com/z-galaxy/zbus/",
+      "upstream_notices": [
+        "upstream/zvariant_utils-4.2.0/LICENSE"
+      ],
+      "version": "4.2.0"
+    }
+  ],
+  "target": "x86_64-unknown-linux-gnu"
+}

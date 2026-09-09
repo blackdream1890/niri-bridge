@@ -1,0 +1,6 @@
+**
+!packaging/
+!packaging/ubuntu26.04.Dockerfile
+!packaging/tools.json
+!scripts/
+!scripts/fetch-tools.py

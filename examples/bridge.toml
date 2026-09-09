@@ -1,0 +1,21 @@
+# Paths to this device's identity and the paired device's public certificate.
+certificate = "identity.pem"
+private_key = "identity.key.pem"
+peer_certificate = "peer.pem"
+peer_name = "desktop"
+
+# Use stable /dev/input/by-path or /dev/input/by-id links, not event numbers.
+activity_devices = ["/dev/input/by-path/example-event-kbd", "/dev/input/by-path/example-event-mouse"]
+
+# Add the touchpad's stable path above to forward native three/four-finger gestures.
+native_touchpads = true
+
+# Connection direction is independent of which computer supplies physical input.
+# One peer listens and the other connects; both can send keyboard and pointer events.
+[connection]
+mode = "connect"
+address = "desktop.local:42420"
+
+[edge]
+output = "eDP-1"
+boundary = { edge = "top", start = 0.0, end = 1.0 }

@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible NiriBridge problem
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security issues, use the repository's private vulnerability-reporting channel.
+        Do not attach pairing files, private keys, real network addresses, raw input recordings or unreviewed logs.
+  - type: input
+    id: version
+    attributes:
+      label: NiriBridge version
+      placeholder: 0.2.0-beta.1
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment on both computers
+      description: OS and Niri versions, generic keyboard/pointer types, display scaling and input direction. Omit hostnames and device serials.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, what happened, and what should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery and frequency
+      description: Does returning locally, restarting sharing, or reconnecting help? Does the issue affect one or both input directions?
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy review
+      options:
+        - label: I reviewed this report and its attachments for private keys, pairing files and personal information.
+          required: true

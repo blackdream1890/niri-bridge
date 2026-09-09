@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, release-preparation]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Ubuntu 26.04 checks and packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build isolated toolchain and Niri
+        run: docker build --tag niri-bridge-build:ci --file packaging/ubuntu26.04.Dockerfile .
+      - name: Test, audit and package
+        run: |
+          mkdir dist
+          docker run --rm --env NIRI_BRIDGE_CI=1 \
+            --mount type=bind,source="$PWD",target=/workspace,readonly \
+            --mount type=bind,source="$PWD/dist",target=/output \
+            niri-bridge-build:ci bash scripts/ci.sh
+      - name: Retain checked build assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ubuntu26.04-x86_64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# License choices for the Linux release; do not relax this list to silence a failure.
+accepted = ["GPL-3.0-or-later", "Apache-2.0", "MIT", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib"]
+targets = ["x86_64-unknown-linux-gnu"]
+ignore-dev-dependencies = true
+ignore-build-dependencies = false

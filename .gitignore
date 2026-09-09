@@ -1,0 +1,37 @@
+# Rust build artifacts (keep Cargo.lock for the application when added).
+/target/
+
+# Local configuration and secrets.
+/.local/
+.env
+.env.*
+!.env.example
+/config.local.toml
+/config.*.local.toml
+/secrets/
+/certs/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Runtime output and private diagnostics.
+/logs/
+/recordings/
+/tmp/
+*.log
+*.pcap
+*.pcapng
+
+# Editor and operating-system artifacts.
+*~
+*.swp
+*.swo
+.DS_Store
+
+# Python setup helper bytecode.
+__pycache__/
+*.py[cod]
+
+# Release assets are attached to GitHub Releases, not committed.
+/dist/
