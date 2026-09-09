@@ -63,7 +63,10 @@ if [ "$1" = remove ]; then
 fi
 ''', 0o755)
         for path in sorted(root.rglob('*'), reverse=True):
+            if path.is_dir():
+                path.chmod(0o755)
             os.utime(path, (epoch, epoch))
+        root.chmod(0o755)
         os.utime(root, (epoch, epoch))
         subprocess.run(['dpkg-deb', '--build', '--root-owner-group', '--uniform-compression', '-Zxz',
                         str(root), str(destination.resolve())], check=True,

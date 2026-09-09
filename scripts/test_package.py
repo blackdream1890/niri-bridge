@@ -2,6 +2,11 @@
 """Package migration checks use only temporary user application files."""
 import importlib.util
 import json
+import io
+import os
+import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 import tempfile
 import unittest
@@ -76,6 +81,34 @@ class PackageMigrationTests(unittest.TestCase):
         self.assertTrue(args[6].endswith('/scripts/package.py'))
         self.assertEqual(args[7], '--register-user')
         self.assertEqual(set(run.call_args.kwargs['env']), {'PATH', 'HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'})
+
+
+@unittest.skipUnless(shutil.which('dpkg-deb'), 'Debian packaging requires dpkg-deb')
+class PackageArchiveTests(unittest.TestCase):
+    def test_directory_permissions_and_package_bytes_do_not_depend_on_builder_umask(self):
+        spec = importlib.util.spec_from_file_location('build_deb', Path(package.__file__).with_name('build-deb.py'))
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        files = {'bin/niri-bridge': (b'synthetic binary fixture', 0o755),
+                 'ui/assets/niri-bridge.svg': (b'synthetic icon fixture', 0o644),
+                 'COPYRIGHT': (b'synthetic copyright fixture', 0o644),
+                 'LICENSE': (b'synthetic license fixture', 0o644)}
+        metadata = {'version': '0.0.0-test', 'minimum_glibc_symbol_version': '2.42'}
+        with tempfile.TemporaryDirectory() as temporary:
+            outputs = []
+            for mask in (0o077, 0o002):
+                path = Path(temporary) / (str(mask) + '.deb')
+                previous = os.umask(mask)
+                try:
+                    builder.build(path, files, metadata, 1700000000)
+                finally:
+                    os.umask(previous)
+                outputs.append(path.read_bytes())
+                with tarfile.open(fileobj=io.BytesIO(subprocess.check_output(['dpkg-deb', '--fsys-tarfile', str(path)]))) as archive:
+                    for member in archive:
+                        if member.isdir():
+                            self.assertEqual(member.mode, 0o755, member.name)
+            self.assertEqual(outputs[0], outputs[1])
 
 
 if __name__ == '__main__':
