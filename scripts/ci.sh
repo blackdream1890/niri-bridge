@@ -24,7 +24,16 @@ cargo test --locked --test nested_capture -- --ignored --nocapture
 cargo test --locked --test encrypted_bridge -- --ignored --nocapture --test-threads=1
 cargo-audit audit --deny warnings
 python3 -B scripts/third_party.py --check
-systemd-analyze --user verify service/niri-bridge.service
+python3 -B - <<'PYUNIT'
+import os, subprocess, tempfile
+from pathlib import Path
+with tempfile.TemporaryDirectory(prefix='niri-bridge-unit-check-') as directory:
+    unit = Path(directory) / 'niri-bridge.service'
+    binary = Path(os.environ['CARGO_TARGET_DIR']) / 'debug/niri-bridge'
+    assert binary.is_file()
+    unit.write_text(Path('service/niri-bridge.service').read_text().replace('%h/.local/bin/niri-bridge', str(binary)))
+    subprocess.run(['systemd-analyze', '--user', 'verify', str(unit)], env=dict(os.environ, XDG_RUNTIME_DIR=directory), check=True)
+PYUNIT
 cargo build --locked --release
 python3 -B scripts/release.py --binary "$CARGO_TARGET_DIR/release/niri-bridge" --output /output
 runuser -u tester -- python3 -B scripts/smoke-install.py --archive /output/niri-bridge-*-ubuntu26.04-x86_64.tar.gz
