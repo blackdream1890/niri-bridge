@@ -21,7 +21,7 @@ def main():
         environment = {'PATH': '/usr/bin:/bin', 'HOME': str(home), 'USER': user.pw_name,
                        'LOGNAME': user.pw_name, 'XDG_RUNTIME_DIR': '/run/user/' + str(user.pw_uid),
                        'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/' + str(user.pw_uid) + '/bus'}
-        result = subprocess.run(['runuser', '-u', user.pw_name, '--', '/usr/bin/python3', '-I', str(helper),
+        result = subprocess.run(['/usr/sbin/runuser', '-u', user.pw_name, '--', '/usr/bin/python3', '-I', str(helper),
                                  '--' + sys.argv[1] + '-user'], env=environment, capture_output=True)
         failed |= result.returncode != 0
     if failed:

@@ -72,7 +72,7 @@ class PackageMigrationTests(unittest.TestCase):
              mock.patch('sys.argv', ['package-users.py', 'register']):
             hooks.main()
         args = run.call_args.args[0]
-        self.assertEqual(args[:6], ['runuser', '-u', 'test-user', '--', '/usr/bin/python3', '-I'])
+        self.assertEqual(args[:6], ['/usr/sbin/runuser', '-u', 'test-user', '--', '/usr/bin/python3', '-I'])
         self.assertTrue(args[6].endswith('/scripts/package.py'))
         self.assertEqual(args[7], '--register-user')
         self.assertEqual(set(run.call_args.kwargs['env']), {'PATH', 'HOME', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'})

@@ -44,7 +44,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: NiriBridge contributors <174260507+blackdream1890@users.noreply.github.com>
 Homepage: https://github.com/blackdream1890/niri-bridge
-Depends: libc6 (>= {metadata['minimum_glibc_symbol_version']}), libgcc-s1, python3 (>= 3.11), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, openssl, acl, pkexec, systemd
+Depends: libc6 (>= {metadata['minimum_glibc_symbol_version']}), libgcc-s1, python3 (>= 3.11), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, openssl, acl, pkexec, systemd, util-linux
 Description: Share keyboard, pointer and touchpad gestures between Niri desktops
  NiriBridge connects two Ubuntu 26.04 computers running Niri 26.04.
  Open the application to set up pairing and choose Start sharing.
