@@ -3,6 +3,7 @@
 from __future__ import annotations
 from i18n import _, N_
 import json
+import copy
 import os
 from pathlib import Path
 import socket
@@ -25,6 +26,12 @@ ERRORS = {
     'pair_same_device': N_("This is your own pairing file. Select the file exported by the other computer."),
     'output_unavailable': N_("The selected display is unavailable. Choose an active display."),
     'layout_invalid': N_("The entry range is invalid. Its start must be before its end."),
+    'layout_overlap': N_("Connections overlap on the same screen edge. Adjust their ranges or remove a connection."),
+    'layout_count_invalid': N_("Keep between 1 and 16 screen connections."),
+    'layout_ids_invalid': N_("The connections could not be matched between computers. Reload and review both endpoints."),
+    'layout_no_space': N_("There is no unused edge range. Shorten or remove a connection before adding another."),
+    'backend_update_required': N_("Update NiriBridge on both computers to add more screen connections."),
+    'stop_failed': N_("Sharing could not be stopped. NiriBridge is still open. Try Stop sharing again before quitting."),
     'input_selection_empty': N_("Select at least one keyboard, mouse or touchpad."),
     'input_path_invalid': N_("The input device path is unavailable. Select the device again from the list."),
     'address_invalid': N_("The address or port is invalid. Check it and try again."),
@@ -116,9 +123,9 @@ class Model:
         except (OperationError, ValueError, KeyError):
             pass
 
-    def service(self):
-        output = self.command(['systemctl', '--user', 'show', 'niri-bridge.service',
-                               '--property=ActiveState', '--property=SubState', '--property=UnitFileState', '--property=MainPID'])
+    def service(self, unit='niri-bridge.service'):
+        output = self.command(['systemctl', '--user', 'show', unit,
+                               '--property=ActiveState', '--property=SubState', '--property=UnitFileState', '--property=MainPID', '--property=ExecMainStatus', '--property=ExecMainCode'])
         return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
 
     def poll(self):
@@ -130,7 +137,9 @@ class Model:
         if status and status.get('config_path') and Path(status['config_path']).resolve() != self.config.resolve():
             status = dict(status, reason='config_changed')
         unmanaged = bool(status and str(status.get('pid', '')) != service.get('MainPID', ''))
-        return {'service': service, 'status': status, 'unmanaged': unmanaged}
+        startup = self.service('niri-bridge-ui.service').get('UnitFileState')
+        return {'service': service, 'status': status, 'unmanaged': unmanaged,
+                'autostart': startup in ('enabled', 'enabled-runtime')}
 
     def load(self):
         if not self.explicit_config:
@@ -165,18 +174,51 @@ class Model:
         self.ensure_managed()
         if not self.controls_current_config():
             raise OperationError('config_changed')
-        self.command(['systemctl', '--user', 'start' if running else 'stop', 'niri-bridge.service'])
-        return self.poll()
+        previous = self.poll() if not running else None
+        if running or previous['service'].get('ActiveState') not in ('inactive', 'failed'):
+            self.command(['systemctl', '--user', 'start' if running else 'stop', 'niri-bridge.service'])
+        result = self.poll()
+        if not running and result['service'].get('ActiveState') not in ('inactive', 'failed'):
+            raise OperationError('stop_failed')
+        unclean_exit = result['service'].get('ExecMainCode') in ('2', '3')  # CLD_KILLED / CLD_DUMPED
+        if previous and (previous['service'].get('ActiveState') in ('active', 'activating', 'deactivating') or unclean_exit):
+            legacy = not (previous.get('status') or {}).get('safe_touchpad_release')
+            failed_cleanup = result['service'].get('ExecMainStatus', '0') != '0'
+            if (legacy or failed_cleanup or unclean_exit) and self.config.is_file():
+                self.command([self.binary, 'restore-input', '--config', str(self.config)], timeout=20)
+        return result
+
+    def stop_for_exit(self):
+        """Do not acknowledge an application exit while its managed sharing is active."""
+        try:
+            result = self.set_running(False)
+            if result['service'].get('ActiveState') not in ('inactive', 'failed'):
+                raise OperationError('stop_failed')
+            return result
+        except OperationError as error:
+            if error.code in ('manual_instance', 'config_changed'):
+                raise
+            raise OperationError('stop_failed') from error
 
     def set_autostart(self, enabled):
         self.ensure_managed()
-        self.command(['systemctl', '--user', 'enable' if enabled else 'disable', 'niri-bridge.service'])
+        self.command(['systemctl', '--user', 'disable', 'niri-bridge.service'])
+        self.command(['systemctl', '--user', 'enable' if enabled else 'disable', 'niri-bridge-ui.service'])
         return self.poll()
 
     def release(self):
         return self.rpc({'command': 'release'})
 
     def apply_layout(self, layout):
+        status = self.rpc({'command': 'status'})
+        if not all('edges' in (status.get(role) or {}) for role in ('local', 'peer')):
+            if len(layout['local_edges']) != 1 or len(layout['peer_edges']) != 1:
+                raise OperationError('backend_update_required')
+            layout = copy.deepcopy(layout)
+            for role in ('local', 'peer'):
+                edge = layout.pop(role + '_edges')[0]
+                edge.pop('id', None)
+                layout[role + '_edge'] = edge
         return self.rpc({'command': 'apply_layout', 'layout': layout})
 
     def _with_request(self, action, data, extra=()):

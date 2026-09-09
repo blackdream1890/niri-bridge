@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Configuration operations shared by the desktop UI and paired layout updates.
 use crate::{
-    bridge::{Config, Connection, EdgeConfig},
+    bridge::{Config, Connection, EdgeConfig, validate_edges},
     identity, niri, transport,
 };
 use anyhow::{Context, Result, ensure};
@@ -60,7 +60,7 @@ pub struct CertificateInfo {
 pub struct View {
     pub revision: String,
     pub settings: Settings,
-    pub edge: EdgeConfig,
+    pub edges: Vec<EdgeConfig>,
     pub peer_name: String,
     pub identity: Option<CertificateInfo>,
     pub peer: Option<CertificateInfo>,
@@ -120,7 +120,7 @@ pub fn view(path: &Path) -> Result<View> {
             activity_devices: c.activity_devices,
             native_touchpads: c.native_touchpads,
         },
-        edge: c.edge,
+        edges: c.edges,
         peer_name: c.peer_name,
         identity: certificate(&c.certificate).ok(),
         peer: certificate(&c.peer_certificate).ok(),
@@ -164,7 +164,7 @@ pub struct Prepared {
     _lock: File,
     committed: bool,
     finished: bool,
-    target_output: Option<String>,
+    target_outputs: Vec<String>,
 }
 impl Prepared {
     fn edit(
@@ -191,15 +191,16 @@ impl Prepared {
             _lock: guard,
             committed: false,
             finished: false,
-            target_output: None,
+            target_outputs: Vec::new(),
         })
     }
     pub fn commit(&mut self) -> Result<()> {
-        if let Some(output) = &self.target_output {
+        if !self.target_outputs.is_empty() {
+            let outputs = niri::outputs()?;
             ensure!(
-                niri::outputs()?
-                    .get(output)
-                    .is_some_and(|o| o.logical.is_some()),
+                self.target_outputs
+                    .iter()
+                    .all(|output| outputs.get(output).is_some_and(|o| o.logical.is_some())),
                 "output_unavailable"
             );
         }
@@ -233,36 +234,89 @@ impl Drop for Prepared {
         {
             let _ = atomic(&self.path, &self.before);
         }
+        // Closing our descriptor alone is not sufficient if a concurrent spawn
+        // inherited the open file description before exec closed its copy.
+        unsafe {
+            libc::flock(self._lock.as_raw_fd(), libc::LOCK_UN);
+        }
     }
 }
-pub fn prepare_edge(path: &Path, expected: &str, edge: &EdgeConfig) -> Result<Prepared> {
-    edge.boundary.validate().context("layout_invalid")?;
+pub fn prepare_edges(path: &Path, expected: &str, edges: &[EdgeConfig]) -> Result<Prepared> {
+    validate_edges(edges)?;
     let outputs = niri::outputs()?;
-    let output = outputs
-        .get(&edge.output)
-        .and_then(|o| o.logical)
-        .context("output_unavailable")?;
-    let extent = if matches!(
-        edge.boundary.edge,
-        crate::geometry::Edge::Top | crate::geometry::Edge::Bottom
-    ) {
-        output.width
-    } else {
-        output.height
-    };
-    ensure!(
-        (edge.boundary.end - edge.boundary.start) * extent as f64 >= 1.,
-        "layout_invalid"
-    );
+    for edge in edges {
+        let output = outputs
+            .get(&edge.output)
+            .and_then(|o| o.logical)
+            .context("output_unavailable")?;
+        let extent = if matches!(
+            edge.boundary.edge,
+            crate::geometry::Edge::Top | crate::geometry::Edge::Bottom
+        ) {
+            output.width
+        } else {
+            output.height
+        };
+        ensure!(
+            (edge.boundary.end - edge.boundary.start) * extent as f64 >= 1.,
+            "layout_invalid"
+        );
+    }
     let mut prepared = Prepared::edit(path, expected, |doc| {
-        doc["edge"]["output"] = value(&edge.output);
-        doc["edge"]["boundary"]["edge"] = value(edge.boundary.edge.as_str());
-        doc["edge"]["boundary"]["start"] = value(edge.boundary.start);
-        doc["edge"]["boundary"]["end"] = value(edge.boundary.end);
+        write_edges(doc, edges);
         Ok(())
     })?;
-    prepared.target_output = Some(edge.output.clone());
+    prepared.target_outputs = edges.iter().map(|edge| edge.output.clone()).collect();
     Ok(prepared)
+}
+
+fn write_edges(doc: &mut DocumentMut, edges: &[EdgeConfig]) {
+    fn clear_positions(table: &mut toml_edit::Table) {
+        table.set_position(None);
+        for (_, item) in table.iter_mut() {
+            if let Some(table) = item.as_table_mut() {
+                clear_positions(table);
+            }
+        }
+    }
+    fn replace(item: &mut Item, next: Item) {
+        let decor = item.as_value().map(|value| value.decor().clone());
+        *item = next;
+        if let (Some(decor), Some(value)) = (decor, item.as_value_mut()) {
+            *value.decor_mut() = decor;
+        }
+    }
+    let mut previous = std::collections::BTreeMap::new();
+    if let Some(table) = doc.remove("edge").and_then(|item| item.as_table().cloned()) {
+        let id = table
+            .get("id")
+            .and_then(Item::as_str)
+            .unwrap_or("default")
+            .to_owned();
+        previous.insert(id, table);
+    }
+    if let Some(tables) = doc.get("edges").and_then(Item::as_array_of_tables) {
+        for table in tables {
+            if let Some(id) = table.get("id").and_then(Item::as_str) {
+                previous.insert(id.to_owned(), table.clone());
+            }
+        }
+    }
+    let mut tables = toml_edit::ArrayOfTables::new();
+    for edge in edges {
+        let mut table = previous.remove(&edge.id).unwrap_or_default();
+        clear_positions(&mut table);
+        replace(&mut table["id"], value(&edge.id));
+        replace(&mut table["output"], value(&edge.output));
+        replace(
+            &mut table["boundary"]["edge"],
+            value(edge.boundary.edge.as_str()),
+        );
+        replace(&mut table["boundary"]["start"], value(edge.boundary.start));
+        replace(&mut table["boundary"]["end"], value(edge.boundary.end));
+        tables.push(table);
+    }
+    doc["edges"] = Item::ArrayOfTables(tables);
 }
 fn settings(doc: &mut DocumentMut, s: &Settings) -> Result<()> {
     ensure!(
@@ -342,7 +396,7 @@ pub fn import_peer(
 }
 pub fn initialize(path: &Path, name: &str, request: InitializeRequest) -> Result<()> {
     ensure!(!path.exists(), "config_exists");
-    request.edge.boundary.validate()?;
+    validate_edges(std::slice::from_ref(&request.edge))?;
     let directory = path.parent().context("config_invalid")?;
     if !directory.exists() {
         fs::create_dir_all(directory)?;
@@ -355,10 +409,7 @@ pub fn initialize(path: &Path, name: &str, request: InitializeRequest) -> Result
     doc["peer_certificate"] = value("peer.pem");
     doc["peer_name"] = value("unpaired");
     settings(&mut doc, &request.settings)?;
-    doc["edge"]["output"] = value(request.edge.output);
-    doc["edge"]["boundary"]["edge"] = value(request.edge.boundary.edge.as_str());
-    doc["edge"]["boundary"]["start"] = value(request.edge.boundary.start);
-    doc["edge"]["boundary"]["end"] = value(request.edge.boundary.end);
+    write_edges(&mut doc, &[request.edge]);
     if !directory.join("identity.pem").exists() {
         identity::create(directory, name)?;
     }
@@ -383,6 +434,9 @@ pub fn error_code(error: &anyhow::Error) -> &'static str {
         "settings_conflict",
         "settings_write_failed",
         "layout_invalid",
+        "layout_count_invalid",
+        "layout_ids_invalid",
+        "layout_overlap",
         "output_unavailable",
         "input_selection_empty",
         "input_path_invalid",
@@ -478,6 +532,72 @@ mod tests {
         (directory, path)
     }
     #[test]
+    fn legacy_edge_migrates_to_multiple_connections_without_losing_comments_or_identity_settings() {
+        let (_directory, path) = config();
+        let original = fs::read_to_string(&path)
+            .unwrap()
+            .replace("[edge]", "# Edge note\n[edge]")
+            .replace("output = 'screen'", "output = 'screen' # Output note");
+        fs::write(&path, &original).unwrap();
+        let legacy = Config::load(&path).unwrap();
+        assert_eq!(legacy.edges.len(), 1);
+        assert_eq!(legacy.edges[0].id, "default");
+        let mut second = legacy.edges[0].clone();
+        second.id = "side".into();
+        second.output = "portrait".into();
+        second.boundary.edge = crate::geometry::Edge::Right;
+        second.boundary.start = 0.7;
+        let mut edges = vec![legacy.edges[0].clone(), second];
+        let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+            write_edges(doc, &edges);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        prepared.commit().unwrap();
+        prepared.finish();
+        let next = Config::load(&path).unwrap();
+        assert_eq!(next.edges.len(), 2);
+        assert_eq!(next.edges[1].id, "side");
+        assert_eq!(next.edges[1].output, "portrait");
+        assert_eq!(next.private_key, legacy.private_key);
+        assert_eq!(next.peer_certificate, legacy.peer_certificate);
+        let text = fs::read_to_string(&path).unwrap();
+        for comment in ["# Keep this comment", "# Edge note", "# Output note"] {
+            assert!(text.contains(comment));
+        }
+        edges.reverse();
+        let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+            write_edges(doc, &edges);
+            Ok(())
+        })
+        .unwrap();
+        prepared.commit().unwrap();
+        prepared.finish();
+        assert!(fs::read_to_string(&path).unwrap().contains("# Output note"));
+        assert_eq!(Config::load(&path).unwrap().edges[0].id, "side");
+    }
+
+    #[test]
+    fn legacy_and_new_edge_sections_cannot_silently_override_each_other() {
+        let (_directory, path) = config();
+        let original = fs::read_to_string(&path).unwrap();
+        fs::write(&path, original + "\n[[edges]]\nid = 'second'\noutput = 'portrait'\nboundary = { edge = 'right', start = 0.7, end = 1.0 }\n").unwrap();
+        assert!(Config::load(&path).is_err());
+    }
+
+    #[test]
+    fn completed_transaction_releases_its_lock_even_if_a_spawn_inherited_the_descriptor() {
+        let (_directory, path) = config();
+        let prepared = Prepared::edit(&path, &revision(&path).unwrap(), |_| Ok(())).unwrap();
+        // A concurrent fork can retain the same open file description until exec.
+        let inherited = prepared._lock.try_clone().unwrap();
+        assert!(lock(&path).is_err());
+        prepared.finish();
+        assert!(lock(&path).is_ok());
+        drop(inherited);
+    }
+    #[test]
     fn staged_config_is_not_visible_until_committed_and_unfinished_commit_rolls_back() {
         let (_directory, path) = config();
         let original = fs::read_to_string(&path).unwrap();
@@ -528,7 +648,7 @@ mod tests {
         prepared.commit().unwrap();
         prepared.finish();
         let next = Config::load(&path).unwrap();
-        assert_eq!(next.edge.boundary.edge, crate::geometry::Edge::Bottom);
+        assert_eq!(next.edges[0].boundary.edge, crate::geometry::Edge::Bottom);
         assert!(next.native_touchpads);
         assert_eq!(next.peer_name, "desktop");
         assert_eq!(

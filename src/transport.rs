@@ -18,7 +18,7 @@ use tokio_rustls::{TlsAcceptor, TlsConnector};
 use crate::protocol::{self, Message};
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
-const ALPN: &[u8] = b"niri-bridge/4";
+const ALPN: &[u8] = b"niri-bridge/5";
 
 pub struct Identity {
     pub certificate: CertificateDer<'static>,

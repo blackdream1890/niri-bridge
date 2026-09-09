@@ -17,6 +17,9 @@ struct TestSink {
     pointer: Pointer,
 }
 impl InputSink for TestSink {
+    fn select_output(&mut self, output: &str) -> Result<()> {
+        self.pointer.select_output(output)
+    }
     fn emit(&mut self, event: &InputEvent) -> Result<()> {
         match event {
             InputEvent::Key { .. } => self.keyboard.emit(event),
@@ -136,7 +139,7 @@ fn fixture_node() {
                 }
             });
             let keyboard = Client::new(&display, false);
-            let pointer = Pointer::connect(&display, &config.edge.output).unwrap();
+            let pointer = Pointer::connect(&display, &config.edges[0].output).unwrap();
             let sink = TestSink { keyboard, pointer };
             let mut activity = FileActivity {
                 path: runtime.join("takeover"),
@@ -200,6 +203,10 @@ boundary = {{ edge = "{edge}", start = 0.1, end = 0.9 }}
         ),
     )
     .unwrap();
+    launch_path(desktop, &path)
+}
+
+fn launch_path(desktop: &Desktop, path: &Path) -> ManagedChild {
     let log = File::create(desktop.runtime().join("bridge.log")).unwrap();
     ManagedChild(
         desktop
@@ -738,6 +745,176 @@ fn control_request(desktop: &Desktop, request: serde_json::Value) -> serde_json:
 }
 
 #[test]
+#[ignore = "requires Weston and Niri; verifies both routes and return through a different route"]
+fn multiple_edges_route_both_directions_and_return_through_the_other_connection() {
+    let desktop = Desktop::start();
+    let laptop = Desktop::start();
+    let mut a = Client::new(&desktop.display, true);
+    let mut b = Client::new(&laptop.display, true);
+    a.fullscreen();
+    b.fullscreen();
+    wait_for(
+        || {
+            a.pump();
+            b.pump();
+            a.size() == (1280, 720) && b.size() == (1280, 720)
+        },
+        &[&desktop, &laptop],
+    );
+    identity::create(&desktop.runtime().join("identity"), "desktop").unwrap();
+    identity::create(&laptop.runtime().join("identity"), "laptop").unwrap();
+    fs::copy(
+        desktop.runtime().join("identity/identity.pem"),
+        laptop.runtime().join("peer.pem"),
+    )
+    .unwrap();
+    fs::copy(
+        laptop.runtime().join("identity/identity.pem"),
+        desktop.runtime().join("peer.pem"),
+    )
+    .unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let first = |side| serde_json::json!({"id":"primary","output":"winit","boundary":{"edge":side,"start":0.1,"end":0.9}});
+    let side = |edge, start, end| serde_json::json!({"id":"side","output":"winit","boundary":{"edge":edge,"start":start,"end":end}});
+    for (node, mode, peer, edges) in [
+        (
+            &desktop,
+            "listen",
+            "laptop",
+            vec![first("bottom"), side("right", 0.55, 0.95)],
+        ),
+        // Deliberately reverse the order: the protocol must match stable IDs.
+        (
+            &laptop,
+            "connect",
+            "desktop",
+            vec![side("left", 0.2, 0.85), first("top")],
+        ),
+    ] {
+        fs::write(node.runtime().join("control-api"), "").unwrap();
+        let config = serde_json::json!({"certificate":"identity/identity.pem","private_key":"identity/identity.key.pem",
+            "peer_certificate":"peer.pem","peer_name":peer,"activity_devices":["/test/physical-activity"],
+            "connection":{"mode":mode,"address":address},"edges":edges});
+        fs::write(
+            node.runtime().join("bridge.toml"),
+            toml::to_string(&config).unwrap(),
+        )
+        .unwrap();
+    }
+    a.absolute(640, 360);
+    b.absolute(640, 360);
+    a.pump();
+    b.pump();
+    let node_a = launch_path(&desktop, &desktop.runtime().join("bridge.toml"));
+    let node_b = launch_path(&laptop, &laptop.runtime().join("bridge.toml"));
+    let two_layers = |node: &Desktop| {
+        let out = node
+            .command("niri")
+            .args(["msg", "--json", "layers"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout)
+            .matches("niri-bridge-edge")
+            .count()
+            == 2
+    };
+    for (reverse, x, y, dx, dy, returned_side) in [
+        (false, 640, 719, -2000., 350., "right"),
+        (false, 1279, 560, 600., -2000., "bottom"),
+        (true, 640, 0, 2000., -180., "left"),
+        (true, 0, 400, -600., 2000., "top"),
+    ] {
+        eprintln!("Multiple-edge route: reverse={reverse}, returning at {returned_side}");
+        wait_for(
+            || {
+                two_layers(&desktop)
+                    && two_layers(&laptop)
+                    && [&desktop, &laptop].iter().all(|node| {
+                        let state = control_request(node, serde_json::json!({"command":"status"}))
+                            ["data"]
+                            .clone();
+                        state["capture_ready"] == true && state["role"] == "local"
+                    })
+            },
+            &[&desktop, &laptop],
+        );
+        let (source, target, source_desktop, target_desktop) = if reverse {
+            (&mut b, &mut a, &laptop, &desktop)
+        } else {
+            (&mut a, &mut b, &desktop, &laptop)
+        };
+        source.absolute(640, 360);
+        target.absolute(640, 360);
+        source.pump();
+        target.pump();
+        source.clear();
+        target.clear();
+        source.absolute(x, y);
+        source.pump();
+        wait_for(
+            || {
+                source.pump();
+                !source.focused()
+                    && control_request(target_desktop, serde_json::json!({"command":"status"}))["data"]
+                        ["role"]
+                        == "receiving"
+            },
+            &[&desktop, &laptop],
+        );
+        source.key(30, true);
+        source.key(30, false);
+        source.key(29, true);
+        source.pump();
+        wait_for(
+            || {
+                target.pump();
+                target.saw_key(30, false) && target.saw_key(29, true)
+            },
+            &[&desktop, &laptop],
+        );
+        assert!(!source.saw_key(30, true));
+        source.motion(dx, dy);
+        source.pump();
+        wait_for(
+            || {
+                source.pump();
+                target.pump();
+                // The target app loses focus to its return strip, so release
+                // may arrive as Leave followed by an Enter with no held keys.
+                source.focused()
+                    && target.focused()
+                    && !target.key_held(29)
+                    && control_request(source_desktop, serde_json::json!({"command":"status"}))["data"]
+                        ["role"]
+                        == "local"
+            },
+            &[&desktop, &laptop],
+        );
+        wait_for(
+            || {
+                source.pump();
+                source
+                    .pointer_position()
+                    .is_some_and(|(x, y)| match returned_side {
+                        "left" => x < 10. && y > 140. && y < 620.,
+                        "right" => x > 1270. && y > 390. && y < 690.,
+                        "top" => y < 10. && x > 120. && x < 1160.,
+                        "bottom" => y > 710. && x > 120. && x < 1160.,
+                        _ => false,
+                    })
+            },
+            &[&desktop, &laptop],
+        );
+        source.key(29, false);
+        source.pump();
+    }
+    drop(node_a);
+    drop(node_b);
+}
+
+#[test]
 #[ignore = "requires Weston and Niri; verifies actual paired configuration transactions through the local UI API"]
 fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
     let desktop = Desktop::start();
@@ -768,12 +945,14 @@ fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
     let state = control_request(&desktop, serde_json::json!({"command":"status"}))["data"].clone();
     let original_a = fs::read(desktop.runtime().join("bridge.toml")).unwrap();
     let original_b = fs::read(laptop.runtime().join("bridge.toml")).unwrap();
-    let mut local = state["local"]["edge"].clone();
+    let mut local = state["local"]["edges"][0].clone();
     local["boundary"]["edge"] = serde_json::json!("left");
     local["boundary"]["start"] = serde_json::json!(0.2);
-    let mut peer = state["peer"]["edge"].clone();
+    let mut peer = state["peer"]["edges"][0].clone();
     peer["boundary"]["edge"] = serde_json::json!("right");
-    let request = serde_json::json!({"command":"apply_layout","layout":{"local_edge":local,"peer_edge":peer,"local_revision":state["local"]["revision"],"peer_revision":state["peer"]["revision"]}});
+    let local_side = serde_json::json!({"id":"side","output":"winit","boundary":{"edge":"right","start":0.3,"end":0.7}});
+    let peer_side = serde_json::json!({"id":"side","output":"winit","boundary":{"edge":"left","start":0.2,"end":0.8}});
+    let request = serde_json::json!({"command":"apply_layout","layout":{"local_edges":[local,local_side],"peer_edges":[peer,peer_side],"local_revision":state["local"]["revision"],"peer_revision":state["peer"]["revision"]}});
     let mut conflict = request.clone();
     conflict["layout"]["peer_revision"] = serde_json::json!("0".repeat(64));
     let reply = control_request(&desktop, conflict);
@@ -788,7 +967,7 @@ fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
         original_b
     );
     let mut unavailable = request.clone();
-    unavailable["layout"]["peer_edge"]["output"] = serde_json::json!("missing-output");
+    unavailable["layout"]["peer_edges"][0]["output"] = serde_json::json!("missing-output");
     let reply = control_request(&desktop, unavailable);
     assert_eq!(reply["ok"], false);
     assert_eq!(reply["error"], "output_unavailable");
@@ -804,9 +983,13 @@ fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
     assert_eq!(reply["ok"], true);
     let a = Config::load(&desktop.runtime().join("bridge.toml")).unwrap();
     let b = Config::load(&laptop.runtime().join("bridge.toml")).unwrap();
-    assert_eq!(a.edge.boundary.edge, niri_bridge::geometry::Edge::Left);
-    assert_eq!(b.edge.boundary.edge, niri_bridge::geometry::Edge::Right);
-    assert_eq!(a.edge.boundary.start, 0.2);
+    assert_eq!(a.edges[0].boundary.edge, niri_bridge::geometry::Edge::Left);
+    assert_eq!(b.edges[0].boundary.edge, niri_bridge::geometry::Edge::Right);
+    assert_eq!(a.edges[0].boundary.start, 0.2);
+    assert_eq!(a.edges.len(), 2);
+    assert_eq!(b.edges.len(), 2);
+    assert_eq!(a.edges[1].id, "side");
+    assert_eq!(b.edges[1].id, "side");
     assert_eq!(
         reply["data"]["local_revision"],
         niri_bridge::manager::revision(&desktop.runtime().join("bridge.toml")).unwrap()

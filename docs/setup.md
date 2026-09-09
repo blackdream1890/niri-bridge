@@ -10,7 +10,15 @@ Niri 26.04 must already be installed separately; see the [official Niri project]
 
 The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tray integration uses GIO and the StatusNotifierItem protocol; no additional AppIndicator binding is required.
 
-On Ubuntu, install the runtime dependencies with:
+For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
+
+```sh
+sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb
+```
+
+Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.
+
+For a portable archive or source checkout, install the runtime dependencies with:
 
 ```sh
 sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec
@@ -32,14 +40,9 @@ Launch **NiriBridge** from your application launcher or run:
 niri-bridge-ui
 ```
 
-The installer places the backend and launcher in `~/.local/bin`, UI resources in `~/.local/share/niri-bridge/ui`, and the desktop entry and icon in the standard user application directories. It creates a user service only when one is absent, preserving an existing customized unit. It never replaces your identity, paired certificate, input permissions or configuration.
+The installer places the backend and launcher in `~/.local/bin`, UI resources in `~/.local/share/niri-bridge/ui`, and the desktop entry and icon in the standard user application directories. It installs the backend and interface user services, updating its own unchanged units and preserving customized units. It never replaces your identity, paired certificate, input permissions or configuration.
 
-An active backend is restarted when its installed binary changes. To stage an upgrade before restarting both sides:
-
-```sh
-python3 scripts/install.py --no-restart
-systemctl --user restart niri-bridge.service
-```
+Installation waits for the interface to close, stops sharing safely and leaves it stopped. An older interface without the new quit action must be saved and closed from its tray menu before retrying installation. The old `--no-restart` option is accepted for script compatibility, but installation no longer starts sharing automatically.
 
 Protocol or ALPN mismatches are rejected, so update both computers together.
 
@@ -96,20 +99,38 @@ The managed rule is `/etc/udev/rules.d/71-niri-bridge-input.rules`. Protected re
 
 Once both computers are connected and unlocked, open **Screen connections** on either one.
 
-- Drag the other computer's screen group above, below, left or right of this computer.
-- Choose the display used for crossing on each side.
-- Adjust each highlighted entry range when only part of an edge should connect.
-- Select **Save on both computers**.
+- Select a connection from the list, or use **Add connection** to create another pair of entry edges.
+- Choose each endpoint's display, edge and range independently. Vertical ranges run from top (0%) to bottom (100%); horizontal ranges run from left (0%) to right (100%).
+- Dragging the other computer's screen group adjusts the selected connection. Other connections retain their settings.
+- Matching numbers and colors mark the paired endpoints. **Remove connection** removes the selected pair from the draft; at least one connection is retained.
+- Select **Save on both computers** to apply the complete set. **Discard changes** restores the last saved set.
+
+For example, keep a landscape monitor's bottom edge connected to a laptop's top
+edge, and add the lower part of a portrait monitor's right edge connected to the
+laptop's left edge. Both connections work in both directions, including entering
+through one and returning through the other.
+
+Up to 16 connections are supported between the same two computers. Ranges on the
+same display edge must not overlap; adjacent ranges and different edges are
+allowed. If a display is unavailable, its connections remain configured but are
+inactive; other matched connections can still be used. Select an available
+display or remove the unavailable connection before saving a new set.
 
 Saving briefly restores local control, validates both configurations and writes the new entry settings. The connection is re-established using the new settings. Changes in another interface or an editor are detected by configuration revisions and are not silently overwritten. If a network interruption prevents confirmation, check the displayed settings after reconnection before assuming the change completed.
 
 Each computer's internal monitor positions remain managed by Niri. This interface configures the crossing between the computers.
 
+Multiple connections require protocol 5, so upgrade both computers together.
+The old single `[edge]` configuration loads as one connection. Saving uses
+`[[edges]]` entries with matching IDs on both sides; the interface manages these
+IDs. Preserve a pre-upgrade configuration copy for rollback because earlier
+versions do not read the new format. See [the configuration example](../examples/bridge.toml).
+
 ## Running and returning control
 
-The interface's Start/Pause control operates `niri-bridge.service`. The automatic-start preference controls whether that user service starts with your Niri graphical session. Closing the window or quitting the interface leaves the service running.
+Opening the interface does not start sharing. **Start sharing** starts `niri-bridge.service`; **Stop sharing** releases input and leaves the interface open. **Quit NiriBridge** from the tray waits for sharing to stop before closing the application. If stopping fails, the interface stays open and explains that sharing could not be stopped.
 
-The tray menu can reopen the window, pause/resume sharing or quit the interface. A tray host such as Waybar is needed for the icon; the application launcher remains available without a tray host.
+Closing the window hides it in the tray and retains the current sharing state. Without a tray host, closing the window follows the quit-and-stop behavior. A tray host such as Waybar is needed for the icon. **Open NiriBridge when I log in** enables only `niri-bridge-ui.service`. Existing automatic backend startup is migrated to opening the interface; click Start sharing when ready.
 
 **Ctrl+Alt+Shift+Escape** returns to the source computer independently of a network reply. Ordinary Escape is forwarded. Physical input on the receiving computer ends the shared session. Locking either computer pauses input and releases capture and held states.
 
@@ -118,7 +139,7 @@ systemctl --user stop niri-bridge.service
 systemctl --user start niri-bridge.service
 ```
 
-Native touchpad mode takes over the selected touchpad while the paired, unlocked connection is available, routing its frames to a local or remote virtual touchpad. Initial takeover waits for all fingers to lift. Crossings preserve current contact state; stopping or disconnecting releases device access. The destination's Niri `input { touchpad { ... } }` settings control tapping, natural scrolling and acceleration.
+Native touchpad mode takes over the selected touchpad while the paired, unlocked connection is available, routing its frames to a local or remote virtual touchpad. Initial takeover waits for all fingers and touchpad buttons to be released. Crossings preserve current contact state; stopping or disconnecting restores a neutral contact and axis state before returning device access to the original compositor reader. The destination's Niri `input { touchpad { ... } }` settings control tapping, natural scrolling and acceleration.
 
 ## Diagnosis and recovery
 
@@ -150,7 +171,11 @@ The installer preserves externally changed rules. It restores saved ACLs only fo
 
 ## Upgrade and uninstall
 
-Download and verify the next release on both computers. Run `python3 scripts/install.py --no-restart` from each new archive, then restart `niri-bridge.service` on both. Existing configurations, identities and custom service files are retained. The installer records the hashes of its own application files for later removal.
+Install the new `.deb` on both computers and reopen NiriBridge. With a portable archive, run `python3 scripts/install.py` from each new archive. Save open edits and quit an older interface from its tray if prompted. Keep fingers off the touchpad during the brief input handoff. When both computers show the new version, click **Start sharing** on each.
+
+Before replacing files, the installer makes a private backup under `~/.local/state/niri-bridge/backups/`. It includes the old application files, current configuration and service definitions, including edited application files; private pairing keys are retained in place. Backups are not automatically deleted. Settings, identities and custom service files are preserved, and the installer records hashes for later removal. Protocol 5 and `[[edges]]` configuration require the same version on both computers; an old version needs its corresponding configuration backup for rollback.
+
+For a `.deb` installation, remove NiriBridge through the system package manager or `sudo apt remove niri-bridge`. Save edits and quit its tray first. This also removes unchanged per-user package installations while retaining user settings, identities, backups and input authorization. Use the following commands for a portable installation:
 
 Preview removal before executing it:
 
@@ -159,7 +184,7 @@ niri-bridge-uninstall --dry-run
 niri-bridge-uninstall
 ```
 
-Application removal preserves configuration and pairing files, retains edited application files, and stops/removes only the user service it owns. A custom service must be stopped before removal and its definition is preserved.
+Application removal waits for the interface to close and sharing to stop. It preserves configuration, pairing files and edited application files, and removes only unchanged service definitions it owns. A manually started backend or an unrelated active configuration blocks removal until it is stopped; custom service definitions are retained.
 
 To also revoke the managed input authorization, request administrator authentication explicitly:
 

@@ -3,6 +3,7 @@
 """Check publication candidates without printing any matched private values."""
 import argparse
 import json
+import io
 from pathlib import Path
 import re
 import struct
@@ -100,16 +101,21 @@ def main():
         for reason in findings(name, content, denied):
             issues.append({'file': name, 'reason': reason})
     if args.archive:
-        with tarfile.open(args.archive, 'r:*') as archive:
-            for member in archive:
-                if member.isdir():
-                    continue
-                checked += 1
-                path = Path(member.name)
-                if not member.isfile() or path.is_absolute() or '..' in path.parts or member.size > 128 * 1024 * 1024:
-                    issues.append({'file': member.name, 'reason': 'unexpected archive member'})
-                    continue
-                inspect(member.name, archive.extractfile(member).read())
+        streams = [None]
+        if args.archive.suffix == '.deb':
+            streams = [io.BytesIO(subprocess.check_output(['dpkg-deb', option, str(args.archive)]))
+                       for option in ('--fsys-tarfile', '--ctrl-tarfile')]
+        for stream in streams:
+            with tarfile.open(args.archive if stream is None else None, mode='r:*', fileobj=stream) as archive:
+                for member in archive:
+                    if member.isdir():
+                        continue
+                    checked += 1
+                    path = Path(member.name)
+                    if not member.isfile() or path.is_absolute() or '..' in path.parts or member.size > 128 * 1024 * 1024:
+                        issues.append({'file': member.name, 'reason': 'unexpected archive member'})
+                        continue
+                    inspect(member.name, archive.extractfile(member).read())
     else:
         root = args.tree.resolve()
         for name in tree_files(root):

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Same-user Unix control API. It exposes state and bounded management actions, never input data.
 use crate::{
-    bridge::{Config, EdgeConfig},
+    bridge::{Config, EdgeConfig, validate_edges},
     manager, niri,
 };
 use anyhow::{Context, Result, ensure};
@@ -26,7 +26,7 @@ use tokio::{
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Desktop {
-    pub edge: EdgeConfig,
+    pub edges: Vec<EdgeConfig>,
     pub revision: String,
     pub outputs: BTreeMap<String, niri::LogicalOutput>,
 }
@@ -41,13 +41,13 @@ impl Desktop {
             None => String::new(),
         };
         Ok(Self {
-            edge: config.edge.clone(),
+            edges: config.edges.clone(),
             revision,
             outputs,
         })
     }
     pub fn validate(&self) -> Result<()> {
-        self.edge.boundary.validate()?;
+        validate_edges(&self.edges)?;
         ensure!(
             self.outputs.len() <= 32 && self.revision.len() <= 64,
             "Invalid desktop metadata"
@@ -82,6 +82,8 @@ pub struct Snapshot {
     pub local: Option<Desktop>,
     pub peer: Option<Desktop>,
     pub configuring: bool,
+    pub capture_ready: bool,
+    pub safe_touchpad_release: bool,
 }
 impl Snapshot {
     pub fn new(peer_name: String) -> Self {
@@ -99,21 +101,26 @@ impl Snapshot {
             local: None,
             peer: None,
             configuring: false,
+            capture_ready: false,
+            safe_touchpad_release: true,
         }
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LayoutRequest {
-    pub local_edge: EdgeConfig,
-    pub peer_edge: EdgeConfig,
+    pub local_edges: Vec<EdgeConfig>,
+    pub peer_edges: Vec<EdgeConfig>,
     pub local_revision: String,
     pub peer_revision: String,
 }
 impl LayoutRequest {
     pub fn validate(&self) -> Result<()> {
-        self.local_edge.boundary.validate()?;
-        self.peer_edge.boundary.validate()?;
+        validate_edges(&self.local_edges)?;
+        validate_edges(&self.peer_edges)?;
+        let local: std::collections::BTreeSet<_> = self.local_edges.iter().map(|e| &e.id).collect();
+        let peer: std::collections::BTreeSet<_> = self.peer_edges.iter().map(|e| &e.id).collect();
+        ensure!(local == peer, "layout_ids_invalid");
         ensure!(
             self.local_revision.len() == 64 && self.peer_revision.len() == 64,
             "Invalid layout revision"
@@ -358,7 +365,7 @@ async fn serve(
 pub enum LayoutMessage {
     Prepare {
         id: String,
-        edge: EdgeConfig,
+        edges: Vec<EdgeConfig>,
         revision: String,
     },
     Prepared {
@@ -382,8 +389,12 @@ pub enum LayoutMessage {
 impl LayoutMessage {
     pub fn validate(&self) -> Result<()> {
         let id = match self {
-            Self::Prepare { id, edge, revision } => {
-                edge.boundary.validate()?;
+            Self::Prepare {
+                id,
+                edges,
+                revision,
+            } => {
+                validate_edges(edges)?;
                 ensure!(revision.len() == 64, "Invalid layout revision");
                 id
             }

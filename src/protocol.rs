@@ -4,7 +4,7 @@ use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const VERSION: u16 = 4;
+pub const VERSION: u16 = 5;
 pub const MAX_FRAME_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -124,6 +124,27 @@ impl InputEvent {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EdgePosition {
+    pub edge_id: String,
+    pub fraction: f64,
+}
+
+impl EdgePosition {
+    fn validate(&self) -> Result<()> {
+        ensure!(
+            crate::bridge::valid_edge_id(&self.edge_id),
+            "Invalid edge identifier"
+        );
+        ensure!(
+            self.fraction.is_finite() && (0.0..=1.0).contains(&self.fraction),
+            "Invalid edge position"
+        );
+        Ok(())
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Message {
@@ -141,7 +162,7 @@ pub enum Message {
     },
     Begin {
         session: u64,
-        entry_fraction: f64,
+        entry: EdgePosition,
     },
     Input {
         session: u64,
@@ -151,7 +172,7 @@ pub enum Message {
     End {
         session: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        exit_fraction: Option<f64>,
+        exit: Option<EdgePosition>,
     },
     Ping {
         nonce: u64,
@@ -176,29 +197,19 @@ impl Message {
                     descriptor.validate()?;
                 }
             }
-            Self::Begin {
-                session,
-                entry_fraction,
-            } => {
+            Self::Begin { session, entry } => {
                 ensure!(*session != 0, "Session identifier cannot be zero");
-                ensure!(
-                    entry_fraction.is_finite() && (0.0..=1.0).contains(entry_fraction),
-                    "Invalid entry position"
-                );
+                entry.validate()?;
             }
             Self::Input { session, event, .. } => {
                 ensure!(*session != 0, "Session identifier cannot be zero");
                 event.validate()?;
             }
-            Self::End {
-                session,
-                exit_fraction,
-            } => {
+            Self::End { session, exit } => {
                 ensure!(*session != 0, "Session identifier cannot be zero");
-                ensure!(
-                    exit_fraction.is_none_or(|f| f.is_finite() && (0.0..=1.0).contains(&f)),
-                    "Invalid exit position"
-                );
+                if let Some(exit) = exit {
+                    exit.validate()?;
+                }
             }
             _ => {}
         }
@@ -310,5 +321,57 @@ mod tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn entry_and_return_positions_require_bounded_ids_and_finite_fractions() {
+        let valid = EdgePosition {
+            edge_id: "side-connection".into(),
+            fraction: 0.75,
+        };
+        assert!(
+            Message::Begin {
+                session: 1,
+                entry: valid.clone()
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            Message::End {
+                session: 1,
+                exit: Some(valid)
+            }
+            .validate()
+            .is_ok()
+        );
+        for (id, fraction) in [
+            ("".into(), 0.5),
+            ("x".repeat(65), 0.5),
+            ("../edge".into(), 0.5),
+            ("side".into(), f64::NAN),
+            ("side".into(), 1.1),
+        ] {
+            let position = EdgePosition {
+                edge_id: id,
+                fraction,
+            };
+            assert!(
+                Message::Begin {
+                    session: 1,
+                    entry: position.clone()
+                }
+                .validate()
+                .is_err()
+            );
+            assert!(
+                Message::End {
+                    session: 1,
+                    exit: Some(position)
+                }
+                .validate()
+                .is_err()
+            );
+        }
     }
 }

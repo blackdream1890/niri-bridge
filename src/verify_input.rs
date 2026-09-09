@@ -176,13 +176,13 @@ pub fn worker(options: Options) -> Result<Report> {
         let before_keyboards=keyboard_count();
         let display=PathBuf::from(std::env::var_os("WAYLAND_DISPLAY").context("WAYLAND_DISPLAY is missing")?);
         let socket=if display.is_absolute(){display}else{PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR is missing")?).join(display)};
-        let logical=niri::outputs()?.remove(&config.edge.output).context("Output is missing")?.logical.context("Output is disabled")?;
-        let mut pointer=Pointer::connect(&socket,&config.edge.output)?;
+        let logical=niri::outputs()?.remove(&config.edges[0].output).context("Output is missing")?.logical.context("Output is disabled")?;
+        let mut pointer=Pointer::connect(&socket,&config.edges[0].output)?;
         let mut receiver=Receiver::new(Keyboard::create()?);
         pointer.emit(&InputEvent::Absolute{x:logical.width/2,y:logical.height/2,width:logical.width,height:logical.height})?;
-        let edge=EdgeConfig{output:config.edge.output.clone(),boundary:Boundary{edge:Edge::Top,start:0.35,end:0.65}};
+        let edge=EdgeConfig{id:"probe".into(),output:config.edges[0].output.clone(),boundary:Boundary{edge:Edge::Top,start:0.35,end:0.65}};
         let (sender,mut events)=tokio::sync::mpsc::channel(128);
-        let task=CaptureTask::start(&edge,1,sender);
+        let task=CaptureTask::start(&[edge],1,sender);
         let capture_result=async {
             loop{match next(&mut events).await.context("Capture surface setup failed")?{Event::Armed=>break,Event::Finished{reason}=>anyhow::bail!("Capture ended before verification: {reason}"),_=>{}}}
             pointer.emit(&InputEvent::Absolute{x:logical.width/2,y:logical.height/2,width:logical.width,height:logical.height})?;

@@ -16,6 +16,14 @@ native_touchpads = true
 mode = "connect"
 address = "desktop.local:42420"
 
-[edge]
+# Each connection has the same id on both computers; its local output/range differs.
+# The UI creates and synchronizes these pairs. The old single [edge] format is also readable.
+[[edges]]
+id = "default"
 output = "eDP-1"
 boundary = { edge = "top", start = 0.0, end = 1.0 }
+
+[[edges]]
+id = "side"
+output = "eDP-1"
+boundary = { edge = "left", start = 0.0, end = 0.8 }

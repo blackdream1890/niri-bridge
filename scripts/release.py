@@ -72,8 +72,9 @@ def main():
     included_roots = {'ui', 'docs', 'licenses', 'service'}
     excluded_ui = {'test_ui.py', 'test_i18n.py', 'render_demo.py'}
     top_docs = {'LICENSE', 'COPYRIGHT', 'THIRD_PARTY_NOTICES.md', 'README.md', 'README.zh-CN.md',
-                'CONTRIBUTING.md', 'CONTRIBUTING.zh-CN.md', 'SECURITY.md', 'SECURITY.zh-CN.md', 'CHANGELOG.md'}
-    scripts = {'scripts/install.py', 'scripts/uninstall.py', 'scripts/device-access.py'}
+                'CONTRIBUTING.md', 'CONTRIBUTING.zh-CN.md', 'SECURITY.md', 'SECURITY.zh-CN.md', 'CHANGELOG.md', 'examples/bridge.toml'}
+    scripts = {'scripts/install.py', 'scripts/uninstall.py', 'scripts/device-access.py',
+               'scripts/lifecycle.py', 'scripts/package.py', 'scripts/package-users.py'}
     for name, value in source.items():
         path = Path(name)
         if name in top_docs or name in scripts or (path.parts[0] in included_roots and path.name not in excluded_ui):
@@ -105,9 +106,14 @@ def main():
     source_path = args.output / (base + '-source.tar.gz')
     archive(binary_path, base, binary, epoch)
     archive(source_path, base, source, epoch)
-    checksums = ''.join(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n' for path in (binary_path, source_path))
+    spec = importlib.util.spec_from_file_location('niri_bridge_deb', ROOT / 'scripts/build-deb.py')
+    deb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(deb)
+    deb_path = args.output / (base + '-ubuntu26.04-amd64.deb')
+    deb.build(deb_path, binary, metadata, epoch)
+    checksums = ''.join(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n' for path in (binary_path, source_path, deb_path))
     (args.output / 'SHA256SUMS').write_text(checksums)
-    for path in (binary_path, source_path):
+    for path in (binary_path, source_path, deb_path):
         subprocess.run(['python3', '-B', str(ROOT / 'scripts/check-public.py'), '--archive', str(path)], check=True)
     print('Release archives and SHA256SUMS created from commit ' + revision + '.')
 

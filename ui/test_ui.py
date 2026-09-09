@@ -11,30 +11,30 @@ from unittest import mock
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
-from app import Application
+from app import Application, Window
 from canvas import LayoutDraft, OPPOSITE
-from model import endpoint, split_endpoint
+from model import Model, OperationError, endpoint, split_endpoint
 from i18n import _
 
 
 def fixture():
-    edge_a = {'output': 'eDP-1', 'boundary': {'edge': 'top', 'start': 0., 'end': 1.}}
-    edge_b = {'output': 'DP-1', 'boundary': {'edge': 'bottom', 'start': .05, 'end': .55}}
-    local = {'edge': edge_a, 'revision': 'a' * 64, 'outputs': {'eDP-1': {'x': 0, 'y': 0, 'width': 1920, 'height': 1200, 'scale': 1.6}}}
-    peer = {'edge': edge_b, 'revision': 'b' * 64, 'outputs': {
+    edge_a = {'id': 'default', 'output': 'eDP-1', 'boundary': {'edge': 'top', 'start': 0., 'end': 1.}}
+    edge_b = {'id': 'default', 'output': 'DP-1', 'boundary': {'edge': 'bottom', 'start': .05, 'end': .55}}
+    local = {'edges': [edge_a], 'revision': 'a' * 64, 'outputs': {'eDP-1': {'x': 0, 'y': 0, 'width': 1920, 'height': 1200, 'scale': 1.6}}}
+    peer = {'edges': [edge_b], 'revision': 'b' * 64, 'outputs': {
         'DP-1': {'x': 0, 'y': 0, 'width': 2648, 'height': 1489, 'scale': 1.45},
         'DP-2': {'x': -1490, 'y': -388, 'width': 1489, 'height': 2648, 'scale': 1.45}}}
     certificate = {'name': 'laptop', 'fingerprint': '0123456789abcdef' * 4, 'expires': '2027-09-08', 'pem': 'public-certificate-fixture'}
-    config = {'revision': 'a' * 64, 'edge': edge_a, 'peer_name': 'desktop',
+    config = {'revision': 'a' * 64, 'edges': [edge_a], 'peer_name': 'desktop',
               'identity': certificate, 'peer': dict(certificate, name='desktop', fingerprint='fedcba9876543210' * 4),
               'settings': {'connection': {'mode': 'connect', 'address': 'desktop.local:42420'},
                            'activity_devices': ['/dev/input/by-path/test-keyboard', '/dev/input/by-path/test-touchpad'], 'native_touchpads': True}}
-    return {'version': '0.2.0-beta.1', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
+    return {'version': '0.2.0-beta.3', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
             'status': {'connection': 'connected', 'role': 'local', 'local_unlocked': True, 'peer_unlocked': True,
                        'peer_name': 'desktop', 'latency_ms': 1.6, 'local': local, 'peer': peer, 'configuring': False},
             'devices': {'uinput_writable': True, 'devices': [
-                {'name': 'Built-in keyboard', 'path': '/dev/input/by-path/test-keyboard', 'classes': ['ID_INPUT_KEYBOARD'], 'readable': True, 'available': True, 'selected': True},
-                {'name': 'Precision touchpad', 'path': '/dev/input/by-path/test-touchpad', 'classes': ['ID_INPUT_TOUCHPAD'], 'readable': True, 'available': True, 'selected': True}]}}
+                {'name': 'Built-in keyboard', 'path': '/dev/input/by-path/test-keyboard', 'classes': ['ID_INPUT_KEYBOARD'], 'readable': True, 'writable': True, 'available': True, 'selected': True},
+                {'name': 'Precision touchpad', 'path': '/dev/input/by-path/test-touchpad', 'classes': ['ID_INPUT_TOUCHPAD'], 'readable': True, 'writable': True, 'available': True, 'selected': True}]}}
 
 
 class FakeModel:
@@ -46,19 +46,22 @@ class FakeModel:
     def load(self):
         return copy.deepcopy(self.data)
     def poll(self):
-        return {k: copy.deepcopy(self.data[k]) for k in ('service', 'status')}
+        return {k: copy.deepcopy(self.data[k]) for k in ('service', 'status')} | {'autostart': self.data.get('autostart', True)}
     def set_running(self, running):
         self.actions.append(('running', running))
         self.data['service']['ActiveState'] = 'active' if running else 'inactive'
         return self.poll()
+    def stop_for_exit(self):
+        return self.set_running(False)
     def set_autostart(self, enabled):
         self.actions.append(('autostart', enabled))
-        self.data['service']['UnitFileState'] = 'enabled' if enabled else 'disabled'
+        self.data['autostart'] = enabled
         return self.poll()
     def apply_layout(self, request):
         self.actions.append(('layout', copy.deepcopy(request)))
-        self.data['status']['local']['edge'] = request['local_edge']
-        self.data['status']['peer']['edge'] = request['peer_edge']
+        self.data['status']['local']['edges'] = request['local_edges']
+        self.data['status']['peer']['edges'] = request['peer_edges']
+        self.data['config']['edges'] = request['local_edges']
         return {'reconnecting': True}
     def release(self):
         self.actions.append(('release',))
@@ -99,6 +102,56 @@ class GeometryTests(unittest.TestCase):
         for host in ['192.0.2.10', 'desktop.local', '2001:db8::1']:
             self.assertEqual(split_endpoint(endpoint(host, 42420)), (host, 42420))
 
+    def test_second_connection_uses_the_portrait_edge_without_overwriting_the_first(self):
+        f = fixture()
+        draft = LayoutDraft(f['status']['local'], f['status']['peer'])
+        original = copy.deepcopy(draft.request())
+        identifier = draft.add_connection()
+        self.assertEqual(draft.local['edge']['boundary']['edge'], 'left')
+        self.assertEqual(draft.peer['edge']['output'], 'DP-2')
+        self.assertEqual(draft.peer['edge']['boundary']['edge'], 'right')
+        self.assertGreater(draft.peer['edge']['boundary']['start'], .5)
+        self.assertEqual(draft.local['edges'][0], original['local_edges'][0])
+        self.assertEqual(draft.peer['edges'][0], original['peer_edges'][0])
+        self.assertEqual(draft.local['edge']['id'], draft.peer['edge']['id'])
+        self.assertIsNone(draft.validation_error())
+        draft.select('default')
+        draft.select(identifier)
+        draft.local['edge']['boundary'] = copy.deepcopy(draft.local['edges'][0]['boundary'])
+        self.assertEqual(draft.validation_error(), 'layout_overlap')
+        draft.remove_connection()
+        self.assertEqual(draft.request(), original)
+
+    def test_missing_output_is_reported_without_silently_replacing_it(self):
+        f = fixture()
+        local = f['status']['local']
+        local['outputs']['replacement'] = local['outputs'].pop('eDP-1')
+        draft = LayoutDraft(local, f['status']['peer'])
+        self.assertEqual(draft.local['edge']['output'], 'eDP-1')
+        self.assertEqual(draft.validation_error(), 'output_unavailable')
+
+    def test_old_backend_keeps_single_connection_edits_and_rejects_multiple(self):
+        f = fixture()
+        for node in (f['status']['local'], f['status']['peer']):
+            node['edge'] = node.pop('edges')[0]
+            node['edge'].pop('id')
+        draft = LayoutDraft(f['status']['local'], f['status']['peer'])
+        self.assertFalse(draft.supports_multiple)
+        model = Model(config=Path('/unused-test-config'))
+        model.rpc = mock.Mock(side_effect=[f['status'], {}])
+        request = copy.deepcopy(draft.request())
+        model.apply_layout(request)
+        sent = model.rpc.call_args_list[-1].args[0]['layout']
+        self.assertIn('local_edge', sent)
+        self.assertNotIn('id', sent['local_edge'])
+        self.assertIn('local_edges', request)
+        draft.add_connection()
+        model.rpc = mock.Mock(return_value=f['status'])
+        with self.assertRaises(OperationError) as result:
+            model.apply_layout(draft.request())
+        self.assertEqual(result.exception.code, 'backend_update_required')
+        self.assertEqual(model.rpc.call_count, 1)
+
 
 class WidgetTests(unittest.TestCase):
     @classmethod
@@ -137,13 +190,14 @@ class WidgetTests(unittest.TestCase):
     def test_03_screen_edit_submits_both_revisions_and_edges(self):
         self.win.navigate('layout')
         self.win.edge_combo.set_active_id('bottom')
+        self.win.boundary_combos['peer'].set_active_id('top')
         self.assertTrue(self.win.layout_dirty)
         self.win.layout_save.emit('clicked')
         pump(lambda: not self.win.busy)
         calls = [action for action in self.model.actions if action[0] == 'layout']
         request = calls[-1][1]
-        self.assertEqual(request['local_edge']['boundary']['edge'], 'bottom')
-        self.assertEqual(request['peer_edge']['boundary']['edge'], 'top')
+        self.assertEqual(request['local_edges'][0]['boundary']['edge'], 'bottom')
+        self.assertEqual(request['peer_edges'][0]['boundary']['edge'], 'top')
         self.assertEqual(request['local_revision'], 'a' * 64)
         self.assertEqual(request['peer_revision'], 'b' * 64)
     def test_04_layout_and_status_render_at_laptop_size(self):
@@ -240,6 +294,117 @@ class WidgetTests(unittest.TestCase):
         self.app.window.about_dialog()
         self.assertIn('GNU GENERAL PUBLIC LICENSE', observed['license'])
         self.assertIn('blackdream1890', observed['copyright'])
+
+    def test_09_multiple_connection_drafts_survive_selection_and_language_changes(self):
+        self.model.data = fixture()
+        self.app.window.settings_dirty = self.app.window.layout_dirty = False
+        self.app.change_language('en')
+        pump(lambda: self.app.window.info is not None and not self.app.window.busy)
+        window = self.app.window
+        window.navigate('layout')
+        before = list(self.model.actions)
+        first = copy.deepcopy(window.editor.draft.request())
+        window.connection_add.emit('clicked')
+        selected = window.editor.draft.selected_id
+        self.assertEqual(len(window.editor.draft.connection_ids()), 2)
+        window.boundary_combos['local'].set_active_id('top')
+        self.assertFalse(window.layout_save.get_sensitive())
+        window.boundary_combos['local'].set_active_id('left')
+        window.range_spins['peer', 'start'].set_value(75)
+        window.connection_combo.set_active_id('default')
+        window.connection_combo.set_active_id(selected)
+        self.assertEqual(window.range_spins['peer', 'start'].get_value(), 75)
+        self.app.change_language('zh_CN')
+        pump(lambda: self.app.window.info is not None and not self.app.window.busy)
+        window = self.app.window
+        self.assertEqual(window.editor.draft.selected_id, selected)
+        self.assertEqual(window.range_spins['peer', 'start'].get_value(), 75)
+        self.assertEqual(self.model.actions, before)
+        self.assertEqual(window.editor.draft.local['edges'][0], first['local_edges'][0])
+        self.assertEqual(window.editor.draft.peer['edges'][0], first['peer_edges'][0])
+        self.assertTrue(window.layout_save.get_sensitive())
+        window.layout_save.emit('clicked')
+        pump(lambda: not window.busy)
+        request = [a[1] for a in self.model.actions if a[0] == 'layout'][-1]
+        self.assertEqual(len(request['local_edges']), 2)
+        self.assertEqual({e['id'] for e in request['local_edges']}, {e['id'] for e in request['peer_edges']})
+        window.connection_combo.set_active_id(selected)
+        window.connection_remove.emit('clicked')
+        self.assertEqual(window.editor.draft.request(), first)
+        self.assertFalse(window.connection_remove.get_sensitive())
+        self.assertTrue(window.layout_dirty)
+        window.reset_layout()
+
+    def test_10_reconnection_does_not_turn_old_peer_metadata_into_an_unsaved_draft(self):
+        window = self.app.window
+        window.layout_dirty = False
+        complete = self.model.poll()
+        identifier = complete['status']['local']['edges'][1]['id']
+        window.connection_combo.set_active_id(identifier)
+        before = list(self.model.actions)
+        transient = copy.deepcopy(complete)
+        transient['status']['peer']['edges'] = transient['status']['peer']['edges'][:1]
+        transient['status']['peer_unlocked'] = None
+        window.update_status(transient)
+        self.assertFalse(window.layout_dirty)
+        self.assertFalse(window.layout_save.get_sensitive())
+        transient['status']['peer'] = None
+        transient['status']['connection'] = 'connecting'
+        window.update_status(transient)
+        window.update_status(complete)
+        self.assertFalse(window.layout_dirty)
+        self.assertEqual(window.editor.draft.selected_id, identifier)
+        self.assertEqual(window.editor.draft.peer['edge'], next(edge for edge in complete['status']['peer']['edges'] if edge['id'] == identifier))
+        self.assertEqual(self.model.actions, before)
+
+    def test_11_opening_an_idle_interface_does_not_start_sharing(self):
+        model = FakeModel()
+        model.data['service']['ActiveState'] = 'inactive'
+        model.data['status'] = None
+        window = Window(self.app, model)
+        try:
+            pump(lambda: window.info is not None and not window.busy)
+            self.assertEqual(model.actions, [])
+            self.assertEqual(window.toggle_button.get_label(), _('Start sharing'))
+            window.toggle_button.emit('clicked')
+            pump(lambda: not window.busy)
+            self.assertEqual(model.actions, [('running', True)])
+        finally:
+            window.destroy()
+            model.directory.cleanup()
+
+    def test_12_tray_exit_stops_sharing_before_quitting_and_keeps_ui_on_failure(self):
+        application = self.app
+        window = application.window
+        window.settings_dirty = window.layout_dirty = False
+        before = len(self.model.actions)
+        with mock.patch.object(application, 'quit') as quit_application:
+            with mock.patch.object(self.model, 'stop_for_exit', side_effect=OperationError('stop_failed')):
+                application.request_quit()
+                pump(lambda: not window.busy)
+            quit_application.assert_not_called()
+            self.assertTrue(window.alive)
+            self.assertFalse(application.quit_pending)
+            self.assertEqual(len(self.model.actions), before)
+
+            def quit_after_stop():
+                self.assertEqual(self.model.actions[-1], ('running', False))
+                self.assertEqual(self.model.data['service']['ActiveState'], 'inactive')
+
+            quit_application.side_effect = quit_after_stop
+            application.request_quit()
+            pump(lambda: quit_application.called)
+            self.assertEqual(quit_application.call_count, 1)
+        application.quit_pending = application.backend_stopped = False
+
+    def test_13_window_close_retains_the_tray_and_existing_sharing(self):
+        window = self.app.window
+        before = list(self.model.actions)
+        with mock.patch.object(window, 'tray', object()), mock.patch.object(window, 'hide') as hide, mock.patch.object(self.app, 'request_quit') as quit_application:
+            self.assertTrue(window.on_close())
+            hide.assert_called_once()
+            quit_application.assert_not_called()
+        self.assertEqual(self.model.actions, before)
 
 
 
