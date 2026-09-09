@@ -31,9 +31,9 @@ class PublicationChecks(unittest.TestCase):
             for tampered in (False, True):
                 archive = Path(directory) / ('modified.tar.gz' if tampered else 'valid.tar.gz')
                 content = b'upstream source'
-                data = {'files': {'src/lib.rs': hashlib.sha256(content).hexdigest()}, 'package': None}
+                data = {'files': {'src/target/platform.rs': hashlib.sha256(content).hexdigest()}, 'package': None}
                 with tarfile.open(archive, 'w:gz') as tar:
-                    for name, value in [('src/lib.rs', content + b' changed' if tampered else content),
+                    for name, value in [('src/target/platform.rs', content + b' changed' if tampered else content),
                                         ('.cargo-checksum.json', json.dumps(data).encode())]:
                         entry = tarfile.TarInfo('release/vendor/example-1.0.0/' + name)
                         entry.size = len(value)

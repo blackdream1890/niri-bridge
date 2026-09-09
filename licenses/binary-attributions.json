@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "attributions": [
+    {
+      "email": "appro@openssl.org",
+      "component": "ring 0.17.14 / CRYPTOGAMS assembly",
+      "source": "https://github.com/briansmith/ring/blob/2723abbca9e83347d82b056d5b239c6604f786df/crypto/fipsmodule/sha/asm/sha512-x86_64.pl",
+      "reason": "Public upstream assembler authorship embedded in the cryptographic implementation; retained with upstream licensing."
+    }
+  ]
+}

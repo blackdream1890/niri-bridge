@@ -25,6 +25,8 @@ The installer adds **NiriBridge** to your application launcher. It preserves exi
 
 ![NiriBridge overview using demo data](docs/images/en/overview.png)
 
+Screenshots use demo device names, fingerprints and a sample connection round-trip time.
+
 The interface provides:
 
 - **Overview:** authenticated connection state, the current control target and measured connection round-trip time.

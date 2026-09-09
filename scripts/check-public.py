@@ -15,14 +15,16 @@ KEY = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----\s+[A-Za-z0
 LOCAL_PATH = re.compile(rb'(?:/home/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+\\)')
 EMAIL = re.compile(rb'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 EXCLUDED = {'.git', '.local', 'target', 'dist', '__pycache__', '.venv'}
+ATTRIBUTIONS = ROOT / 'licenses/binary-attributions.json'
+PUBLIC_ATTRIBUTION_EMAILS = {item['email'].encode() for item in json.loads(ATTRIBUTIONS.read_text())['attributions']} if ATTRIBUTIONS.is_file() else set()
 
 
 def findings(name, content, denied=()):
     result = []
     parts = Path(name).parts
-    if any(part in EXCLUDED for part in parts) or any(part.startswith('.env') and part != '.env.example' for part in parts):
-        result.append('private or generated path')
     upstream = 'vendor' in parts
+    if not upstream and (any(part in EXCLUDED for part in parts) or any(part.startswith('.env') and part != '.env.example' for part in parts)):
+        result.append('private or generated path')
     if not upstream and Path(name).suffix.lower() in ('.pem', '.key', '.p12', '.pfx', '.pcap', '.pcapng', '.log'):
         result.append('credential or diagnostic file')
     for label, pattern in [('private key', KEY), ('token-shaped value', TOKEN), ('personal build path', LOCAL_PATH)]:
@@ -35,7 +37,7 @@ def findings(name, content, denied=()):
     legal = upstream or 'licenses' in parts or Path(name).name in ('LICENSE', 'COPYRIGHT')
     if not legal:
         for address in EMAIL.findall(content):
-            if not (address.endswith(b'@users.noreply.github.com') or address.endswith(b'@example.com') or address.endswith(b'@example.invalid')):
+            if not (address in PUBLIC_ATTRIBUTION_EMAILS or address.endswith(b'@users.noreply.github.com') or address.endswith(b'@example.com') or address.endswith(b'@example.invalid')):
                 result.append('non-private email address')
                 break
     if not upstream and content.startswith(b'\x89PNG\r\n\x1a\n'):

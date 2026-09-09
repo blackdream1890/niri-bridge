@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tarfile
 import tempfile
@@ -42,6 +43,13 @@ def main():
         assert run([binary, '--version']).strip() == 'niri-bridge ' + version
         run([prefix / 'bin/niri-bridge-ui', '--help'])
         assert (prefix / 'share/niri-bridge/docs/LICENSE').is_file()
+        documents = prefix / 'share/niri-bridge/docs'
+        for document in documents.rglob('*.md'):
+            if 'licenses' in document.relative_to(documents).parts:
+                continue
+            for target in re.findall(r'\]\(([^)]+)\)', document.read_text()):
+                if '://' not in target and not target.startswith('#'):
+                    assert (document.parent / target.split('#')[0]).is_file(), 'Installed documentation has a missing local link'
         def manage(*arguments):
             reply = json.loads(run([binary, 'manage', *arguments]))
             if not reply['ok']:

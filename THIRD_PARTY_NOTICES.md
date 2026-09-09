@@ -15,6 +15,9 @@ The evdev dependency is pinned to the upstream `UI_SET_PHYS` correction at
 [7fee138a341f73b81b9c4f8c59e3527c6a169ea3](https://github.com/emberian/evdev/commit/7fee138a341f73b81b9c4f8c59e3527c6a169ea3).
 Its upstream copyright and Apache-2.0/MIT licensing remain intact.
 
+The ring/BoringSSL assembly also embeds a public upstream authorship string.
+The reviewed attribution is recorded in [licenses/binary-attributions.json](licenses/binary-attributions.json); it is retained as upstream attribution, not treated as maintainer-private contact information.
+
 ## System components
 
 Python, GTK, PyGObject, Cairo, OpenSSL, systemd, udev and Niri are supplied by the

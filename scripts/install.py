@@ -70,7 +70,7 @@ def installation_sources():
     sources.extend((ROOT / 'ui' / name, 'share/niri-bridge/ui/' + name, 0o644) for name in UI_FILES)
     documents = [ROOT / name for name in ('README.md', 'README.zh-CN.md', 'CONTRIBUTING.md',
                  'CONTRIBUTING.zh-CN.md', 'SECURITY.md', 'SECURITY.zh-CN.md', 'LICENSE', 'COPYRIGHT', 'THIRD_PARTY_NOTICES.md')]
-    documents.extend((ROOT / 'docs').glob('*.md'))
+    documents.extend((ROOT / 'docs').rglob('*'))
     documents.extend((ROOT / 'licenses').rglob('*') if (ROOT / 'licenses').is_dir() else [])
     for source in documents:
         if source.is_file():
