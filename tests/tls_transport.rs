@@ -104,7 +104,10 @@ async fn paired_peers_exchange_input_and_disconnect_releases_held_keys() {
         &mut tls,
         &Message::Begin {
             session: 1,
-            entry_fraction: 0.5,
+            entry: niri_bridge::protocol::EdgePosition {
+                edge_id: "default".into(),
+                fraction: 0.5,
+            },
         },
     )
     .await

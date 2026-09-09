@@ -9,6 +9,9 @@ use crate::{
 
 pub trait InputSink {
     fn emit(&mut self, event: &InputEvent) -> Result<()>;
+    fn select_output(&mut self, _output: &str) -> Result<()> {
+        anyhow::bail!("This input backend cannot select a pointer output")
+    }
     fn configure_touchpads(&mut self, devices: &[crate::touchpad::Descriptor]) -> Result<()> {
         ensure!(
             devices.is_empty(),
@@ -146,6 +149,21 @@ impl<S: InputSink> Receiver<S> {
         self.sink.emit(event)
     }
 
+    pub fn position_on(&mut self, output: &str, event: &InputEvent) -> Result<()> {
+        ensure!(
+            self.pending_releases.is_empty()
+                && (self.session.is_none() || self.expected_sequence == 0),
+            "Release active input before changing pointer output"
+        );
+        ensure!(
+            matches!(event, InputEvent::Absolute { .. }),
+            "Only an absolute pointer placement is allowed here"
+        );
+        event.validate()?;
+        self.sink.select_output(output)?;
+        self.sink.emit(event)
+    }
+
     fn release_with_touchpads(&mut self, codes: Vec<u16>) -> Result<()> {
         let keys = self.release(codes);
         let pads = self.sink.reset_touchpads();
@@ -190,6 +208,59 @@ mod tests {
             self.0.lock().unwrap().push(event.clone());
             Ok(())
         }
+    }
+
+    #[test]
+    fn output_switches_require_releasing_active_input_and_select_the_requested_display() {
+        struct SelectingSink(Arc<Mutex<Vec<String>>>);
+        impl InputSink for SelectingSink {
+            fn select_output(&mut self, output: &str) -> Result<()> {
+                self.0.lock().unwrap().push(format!("output:{output}"));
+                Ok(())
+            }
+            fn emit(&mut self, event: &InputEvent) -> Result<()> {
+                self.0.lock().unwrap().push(match event {
+                    InputEvent::Button { pressed, .. } => format!("button:{pressed}"),
+                    InputEvent::Absolute { .. } => "position".into(),
+                    _ => unreachable!(),
+                });
+                Ok(())
+            }
+        }
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut receiver = Receiver::new(SelectingSink(events.clone()));
+        let position = InputEvent::Absolute {
+            x: 4,
+            y: 600,
+            width: 1080,
+            height: 1920,
+        };
+        receiver.begin(1).unwrap();
+        receiver
+            .input(
+                1,
+                0,
+                &InputEvent::Button {
+                    code: 272,
+                    pressed: true,
+                },
+            )
+            .unwrap();
+        assert!(receiver.position_on("portrait", &position).is_err());
+        receiver.end(1).unwrap();
+        receiver.position_on("portrait", &position).unwrap();
+        receiver.position_on("landscape", &position).unwrap();
+        assert_eq!(
+            *events.lock().unwrap(),
+            [
+                "button:true",
+                "button:false",
+                "output:portrait",
+                "position",
+                "output:landscape",
+                "position"
+            ]
+        );
     }
 
     #[test]

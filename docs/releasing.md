@@ -34,7 +34,7 @@ replaced with the project maintainer's authorship.
 ## Build and verification
 
 The Dockerfile pins the Ubuntu image digest, Rust toolchain, official Niri source
-commit and audit-tool archive hashes. It uses an isolated Niri/Weston environment,
+commit and audit-tool archive hashes. It uses isolated Niri/Weston sessions and a QEMU kernel/libinput regression,
 with no host input devices or desktop sockets mounted.
 
 From a clean source commit, use an empty output directory:
@@ -48,7 +48,7 @@ docker run --rm --env NIRI_BRIDGE_CI=1 \
   niri-bridge-build:release bash /input/scripts/container-ci.sh
 ```
 
-The pipeline checks formatting, Clippy, ordinary Rust tests, Python installation
+The pipeline checks formatting, Clippy, ordinary Rust tests, isolated kernel and libinput handoff, Python installation
 and privacy tests, translations, both UI languages, isolated input recovery and
 paired screen updates. It audits the locked dependencies, checks license notices,
 builds a release and tests installation, first pairing, upgrade and removal under
@@ -67,11 +67,12 @@ it does not claim bit-for-bit identical executables on arbitrary build hosts.
 
 Every release contains:
 
+- A Ubuntu 26.04 amd64 `.deb` package with runtime dependencies and a desktop update entry point.
 - A Ubuntu 26.04 x86_64 binary archive with the backend, GTK interface, installation
   and removal tools, documentation and license notices.
 - A corresponding-source archive with the exact committed project files, locked
   Rust dependency sources, and an offline Cargo vendor configuration.
-- `SHA256SUMS` covering both archives.
+- `SHA256SUMS` covering both archives and the `.deb` package.
 
 `release.json` records the source commit, version, target, compiler and Cargo.lock
 hash without collecting usernames, machine names, network addresses or input data.

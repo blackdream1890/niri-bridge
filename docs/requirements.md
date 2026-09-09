@@ -13,6 +13,7 @@ English · [简体中文](requirements.zh-CN.md)
 - Native touchpad gestures, including three-finger workspace switching and four-finger overview, follow the pointer's destination.
 - Existing KDE Connect clipboard sharing can continue. NiriBridge does not add another clipboard implementation or depend on KDE Connect for input sharing.
 - A native desktop interface provides screen connections that can be adjusted on one computer and synchronized to both.
+- Multiple configurable edge pairs connect the same two computers. Each has independent displays and ranges, and can be used for entry or return in either direction.
 - The interface uses English source text, a complete Simplified Chinese translation, system locale selection and a manual language choice for English-speaking and Chinese-speaking users.
 
 ## Configuration and community scope
@@ -49,5 +50,16 @@ The user confirmed the basic bidirectional input behavior. Keep every additional
 - [ ] Bidirectional KDE Connect copy/paste acceptance alongside sharing.
 - [ ] End-to-end latency and jitter measurements, including high-rate mouse input.
 - [x] Actual screen-entry changes initiated on either installed desktop updated both configuration files; original files were restored byte-for-byte and both sides reconnected.
+- [x] Isolated two-connection tests cover both directions, return through a different connection, mapped return positions and held-key cleanup.
+- [ ] Multiple connections across the physical landscape, portrait and laptop displays.
 
 Version 0.2 also has widget, translation and paired configuration tests. Real tray open/pause/start/quit behavior, status loading, lock-state controls and preservation of settings/startup state were checked on both installed desktops. Paired-file transaction tests use isolated Niri sessions and mutually authenticated TLS. See [Testing](testing.md) for commands and limitations.
+
+## 0.2.0-beta.3 lifecycle acceptance
+
+- [x] Opening the interface does not start sharing; Start/Stop controls are explicit.
+- [x] Tray quit waits for stop success; failure keeps the interface open.
+- [x] Window close retains the tray and current sharing state.
+- [x] Isolated kernel/libinput checks cover ordinary handoff and legacy ghost-contact recovery.
+- [x] Installation tests cover backups, startup migration, old interfaces and customized files.
+- [ ] Two physical desktops: repeated start/stop, tray quit and upgrade to the release candidate.

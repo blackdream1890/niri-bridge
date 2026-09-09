@@ -21,7 +21,7 @@ class TranslationTests(unittest.TestCase):
     def test_catalog_covers_every_marked_message_and_preserves_placeholders(self):
         catalog = json.loads((ROOT / 'locales/zh_CN.json').read_text())
         messages = set()
-        for filename in ['app.py', 'model.py', 'canvas.py', 'tray.py']:
+        for filename in ['app.py', 'model.py', 'canvas.py', 'tray.py', '../scripts/package.py']:
             tree = ast.parse((ROOT / filename).read_text())
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ('_', 'N_') and node.args and isinstance(node.args[0], ast.Constant):

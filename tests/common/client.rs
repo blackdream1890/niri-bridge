@@ -35,9 +35,12 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::{
 struct State {
     keymap: Option<(u32, OwnedFd, u32)>,
     focused: bool,
+    held: BTreeSet<u32>,
     keys: Vec<(u32, u32)>,
     buttons: Vec<(u32, u32)>,
     surface: Option<wl_surface::WlSurface>,
+    toplevel: Option<xdg_toplevel::XdgToplevel>,
+    pointer_position: Option<(f64, f64)>,
     shm: Option<wl_shm::WlShm>,
     buffer: Option<wl_buffer::WlBuffer>,
     size: (u32, u32),
@@ -83,6 +86,7 @@ impl Client {
             let toplevel = xdg.get_toplevel(&qh, ());
             toplevel.set_app_id("niri-bridge-test-observer".into());
             toplevel.set_title("NiriBridge isolated observer".into());
+            state.toplevel = Some(toplevel);
             state.surface = Some(surface);
             state.surface.as_ref().unwrap().commit();
         }
@@ -103,8 +107,21 @@ impl Client {
     pub fn focused(&self) -> bool {
         self.state.focused
     }
+    pub fn fullscreen(&mut self) {
+        self.state.toplevel.as_ref().unwrap().set_fullscreen(None);
+        self.connection.flush().unwrap();
+    }
+    pub fn size(&self) -> (u32, u32) {
+        self.state.size
+    }
+    pub fn pointer_position(&self) -> Option<(f64, f64)> {
+        self.state.pointer_position
+    }
     pub fn saw_key(&self, code: u32, pressed: bool) -> bool {
         self.state.keys.contains(&(code, u32::from(pressed)))
+    }
+    pub fn key_held(&self, code: u32) -> bool {
+        self.state.held.contains(&code)
     }
     pub fn saw_button(&self, code: u32, pressed: bool) -> bool {
         self.state.buttons.contains(&(code, u32::from(pressed)))
@@ -244,13 +261,31 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
             wl_keyboard::Event::Keymap { format, fd, size } => {
                 s.keymap = Some((format.into(), fd, size))
             }
-            wl_keyboard::Event::Enter { .. } => s.focused = true,
-            wl_keyboard::Event::Leave { .. } => s.focused = false,
+            wl_keyboard::Event::Enter { keys, .. } => {
+                s.focused = true;
+                let (keys, remainder) = keys.as_chunks::<4>();
+                assert!(remainder.is_empty());
+                s.held = keys
+                    .iter()
+                    .map(|bytes| u32::from_ne_bytes(*bytes))
+                    .collect();
+            }
+            wl_keyboard::Event::Leave { .. } => {
+                s.focused = false;
+                s.held.clear();
+            }
             wl_keyboard::Event::Key {
                 key,
                 state: WEnum::Value(state),
                 ..
-            } => s.keys.push((key, state as u32)),
+            } => {
+                s.keys.push((key, state as u32));
+                if state == wl_keyboard::KeyState::Pressed {
+                    s.held.insert(key);
+                } else {
+                    s.held.remove(&key);
+                }
+            }
             _ => {}
         }
     }
@@ -264,13 +299,27 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_pointer::Event::Button {
-            button,
-            state: WEnum::Value(state),
-            ..
-        } = e
-        {
-            s.buttons.push((button, state as u32));
+        match e {
+            wl_pointer::Event::Enter {
+                surface_x,
+                surface_y,
+                ..
+            }
+            | wl_pointer::Event::Motion {
+                surface_x,
+                surface_y,
+                ..
+            } => {
+                s.pointer_position = Some((surface_x, surface_y));
+            }
+            wl_pointer::Event::Button {
+                button,
+                state: WEnum::Value(state),
+                ..
+            } => {
+                s.buttons.push((button, state as u32));
+            }
+            _ => {}
         }
     }
 }

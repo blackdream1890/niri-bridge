@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""NiriBridge native desktop interface. Closing this window does not stop sharing."""
+"""NiriBridge desktop interface. Tray exit stops sharing before the application exits."""
 from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import socket
 import sys
 import gi
@@ -17,7 +18,7 @@ gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, Gio, GLib, Pango, GdkPixbuf
 from i18n import _, N_, configure, get_selection, save_language
 from model import Model, OperationError, endpoint, split_endpoint
-from canvas import ScreenCanvas, EDGE_NAMES, OPPOSITE
+from canvas import ScreenCanvas, BOUNDARY_NAMES, MAX_EDGES, desktop_edges
 from tray import Tray
 
 HERE = Path(__file__).resolve().parent
@@ -140,7 +141,7 @@ class Window(Gtk.ApplicationWindow):
             self.nav[name] = nav
             sidebar.pack_start(nav, False, False, 0)
         sidebar.pack_start(Gtk.Box(), True, True, 0)
-        sidebar.pack_end(text(_("Sharing continues in the\nbackground when you close this window"), 'footer'), False, False, 10)
+        sidebar.pack_end(text(_("Closing the window keeps the tray.\nQuitting NiriBridge stops sharing."), 'footer'), False, False, 10)
         sidebar.pack_end(button(_("Help"), self.help_dialog, icon='help-browser-symbolic'), False, False, 0)
         sidebar.pack_end(button(_("About and license"), self.about_dialog, icon='help-about-symbolic'), False, False, 0)
         root.pack_start(sidebar, False, False, 0)
@@ -221,26 +222,28 @@ class Window(Gtk.ApplicationWindow):
         self.overview_canvas.set_size_request(360, 305)
         page.pack_start(self.overview_canvas, True, True, 0)
         row = box(False, 12)
-        row.pack_start(text(_("Green lines mark the entry edges"), 'muted'), True, True, 0)
+        row.pack_start(text(_("Matching numbers and colors mark paired entry edges"), 'muted'), True, True, 0)
         row.pack_end(button(_("Arrange screens"), lambda *_unused: self.navigate('layout')), False, False, 0)
         page.pack_start(row, False, False, 0)
 
     def build_layout(self):
-        page = self.page('layout', _("Screen connections"), _("Drag the other computer's screens to arrange the connection, then save on both computers."))
+        page = self.page('layout', _("Screen connections"), _("Each connection joins an edge range on each computer. Select a connection to edit or add another."))
+        connections = box(False, 10)
+        self.connection_combo = Gtk.ComboBoxText()
+        self.connection_combo.set_hexpand(True)
+        self.connection_combo.connect('changed', self.connection_selected)
+        self.connection_add = button(_("Add connection"), self.add_connection, icon='list-add-symbolic')
+        self.connection_remove = button(_("Remove connection"), self.remove_connection, icon='list-remove-symbolic')
+        connections.pack_start(self.connection_combo, True, True, 0)
+        connections.pack_start(self.connection_add, False, False, 0)
+        connections.pack_start(self.connection_remove, False, False, 0)
+        page.pack_start(connections, False, False, 0)
         self.editor = ScreenCanvas(editable=True)
         self.editor.set_size_request(360, 335)
         self.editor.connect('layout-changed', self.canvas_changed)
         page.pack_start(self.editor, True, True, 0)
-        self.edge_combo = Gtk.ComboBoxText()
-        for value, label in EDGE_NAMES.items():
-            self.edge_combo.append(value, _(label))
-        self.edge_combo.connect('changed', self.direction_changed)
-        direction = box(False, 12)
-        direction.pack_start(text(_("The other computer is")), False, False, 0)
-        direction.pack_start(self.edge_combo, False, False, 0)
-        direction.pack_end(text(_("Local monitor arrangement follows your desktop settings"), 'muted'), False, False, 0)
-        page.pack_start(direction, False, False, 0)
-        self.output_combos, self.range_spins = {}, {}
+        page.pack_start(text(_("Drag the other computer's screens to adjust the selected connection."), 'muted'), False, False, 0)
+        self.output_combos, self.range_spins, self.boundary_combos = {}, {}, {}
         cards = []
         for role, title in [('local', _("This computer's entry edge")), ('peer', _("Other computer's entry edge"))]:
             panel = card(title)
@@ -248,6 +251,12 @@ class Window(Gtk.ApplicationWindow):
             combo.connect('changed', self.output_changed, role)
             self.output_combos[role] = combo
             panel.pack_start(combo, False, False, 0)
+            side = Gtk.ComboBoxText()
+            for value, label in BOUNDARY_NAMES.items():
+                side.append(value, _(label))
+            side.connect('changed', self.direction_changed, role)
+            self.boundary_combos[role] = side
+            panel.pack_start(side, False, False, 0)
             row = box(False, 6)
             for key, prefix in [('start', _("From")), ('end', _("to"))]:
                 row.pack_start(text(prefix, 'muted', False), False, False, 0)
@@ -262,6 +271,7 @@ class Window(Gtk.ApplicationWindow):
             panel.pack_start(row, False, False, 0)
             cards.append(panel)
         page.pack_start(horizontal(*cards), False, False, 0)
+        self.edge_combo = self.boundary_combos['local']
         self.layout_hint = text(_("Once connected, configure both entry edges here. Saving briefly restores local control."), 'muted')
         page.pack_start(self.layout_hint, False, False, 0)
         actions = box(False, 10)
@@ -331,7 +341,7 @@ class Window(Gtk.ApplicationWindow):
         behavior.pack_start(self.gesture_check, False, False, 0)
         behavior.pack_start(text(_("Three-finger switching and four-finger overview follow the pointer."), 'muted'), False, False, 0)
         row = box(False, 15)
-        row.pack_start(text(_("Start sharing when I log in to Niri")), True, True, 0)
+        row.pack_start(text(_("Open NiriBridge when I log in to Niri")), True, True, 0)
         self.autostart = Gtk.Switch()
         self.autostart.set_valign(Gtk.Align.CENTER)
         self.autostart.connect('notify::active', self.autostart_changed)
@@ -440,6 +450,12 @@ class Window(Gtk.ApplicationWindow):
             self.layout_dirty = True
             self.fill_layout_controls()
             self.editor.queue_draw()
+        elif state.get('layout') and self.editor.draft:
+            identifier = state['layout'].selected_id
+            if identifier in self.editor.draft.connection_ids():
+                self.editor.draft.select(identifier)
+                self.fill_layout_controls()
+                self.editor.queue_draw()
         self.navigate(state['page'])
         self.update_controls()
         self.notice(_('Interface language updated. Unsaved edits were kept.'))
@@ -633,11 +649,13 @@ class Window(Gtk.ApplicationWindow):
             title, description, badge = _("The other computer is unavailable"), _("The other computer is locked or its session is inactive. Sharing can resume when it is available."), _("Other side paused")
         elif status.get('reason') == 'output_unavailable':
             title, description, badge = _('Choose an entry display'), _('An entry display is unavailable. Open Screen connections to select an active display.'), _('Display unavailable')
+        elif status.get('reason') == 'layout_ids_invalid':
+            title, description, badge = _('Review screen connections'), _('The computers have no matching screen connections. Open Screen connections to review both endpoints.'), _('Connections need review')
         elif status.get('reason') == 'protocol_mismatch':
             title, description, badge = _('Update both computers'), _('Install the same NiriBridge version on both computers.'), _('Version mismatch')
         elif connected:
             title = {'sending': _("Controlling the other computer"), 'receiving': _("This computer is being controlled")}.get(role, _("Your computers are connected"))
-            description = {'sending': _("Your keyboard and touchpad gestures are following the pointer to the other computer."), 'receiving': _("Use this computer's physical keyboard or pointer to take back control.")}.get(role, _("Move the pointer across the green edge to start sharing."))
+            description = {'sending': _("Your keyboard and touchpad gestures are following the pointer to the other computer."), 'receiving': _("Use this computer's physical keyboard or pointer to take back control.")}.get(role, _("Move the pointer across a highlighted edge to start sharing."))
             badge, badge_class = _("Connected"), ''
         elif status.get('reason') == 'authentication_failed':
             title, description, badge = _("Pairing verification failed"), _("Check the pairing files and device names on both computers."), _("Verify pairing")
@@ -656,12 +674,12 @@ class Window(Gtk.ApplicationWindow):
         self.metric_labels['latency'].set_text(f'{latency:.1f} ms' if isinstance(latency, (int, float)) else '—')
         self.metric_labels['mode'].set_text({'sending': _("Other computer"), 'receiving': _("Remote control")}.get(role, _("This computer")))
         self.updating = True
-        self.autostart.set_active(service.get('UnitFileState') in ('enabled', 'enabled-runtime'))
+        self.autostart.set_active(bool(self.poll_data.get('autostart')))
         self.updating = False
         local = status.get('local') if status else None
         peer = status.get('peer') if status else None
         if local is None and config:
-            local = {'edge': config['edge'], 'revision': config['revision'], 'outputs': self.info.get('outputs', {})}
+            local = {'edges': desktop_edges(config), 'revision': config['revision'], 'outputs': self.info.get('outputs', {})}
         key = json.dumps([local, peer], sort_keys=True)
         if key != getattr(self, 'overview_key', None):
             self.overview_key = key
@@ -671,11 +689,9 @@ class Window(Gtk.ApplicationWindow):
         if not self.layout_dirty and key != self.layout_key:
             self.layout_key = key
             self.editor.set_desktops(local, peer, peer_name)
-            if self.editor.draft and self.editor.draft.repaired:
-                self.layout_dirty = True
             self.fill_layout_controls()
         if self.tray:
-            self.tray.update(f'NiriBridge · {badge}', (_('Open NiriBridge'), _('Pause sharing') if active else _('Start sharing'), _('Quit the interface')), not self.busy)
+            self.tray.update(f'NiriBridge · {badge}', (_('Open NiriBridge'), _('Stop sharing') if active else _('Start sharing'), _('Quit NiriBridge')), not self.busy)
         self.update_controls()
 
     def update_controls(self):
@@ -684,15 +700,22 @@ class Window(Gtk.ApplicationWindow):
         config = self.info.get('config') if self.info else None
         configuring = bool(status.get('configuring'))
         unmanaged = self.poll_data.get('unmanaged', False)
-        self.toggle_button.set_label(_("Pause sharing") if active else _("Start sharing"))
+        self.toggle_button.set_label(_("Stop sharing") if active else _("Start sharing"))
         self.toggle_button.set_image(Gtk.Image.new_from_icon_name('media-playback-pause-symbolic' if active else 'media-playback-start-symbolic', Gtk.IconSize.BUTTON))
         self.toggle_button.set_sensitive(bool(config) and not unmanaged and not self.busy and not configuring and status.get('reason') != 'config_changed')
         self.release_button.set_sensitive(not self.busy and status.get('connection') == 'connected' and status.get('role') != 'local')
-        valid_layout = self.editor.draft is not None and all(n['edge']['boundary']['start'] < n['edge']['boundary']['end'] for n in (self.editor.draft.local, self.editor.draft.peer))
+        draft = self.editor.draft
+        layout_error = draft.validation_error() if draft else None
+        valid_layout = draft is not None and layout_error is None
         connected = status.get('connection') == 'connected'
-        self.layout_save.set_sensitive(bool(valid_layout and self.layout_dirty and connected and not unmanaged and status.get('local_unlocked') and status.get('peer_unlocked') and not self.busy and not configuring))
+        self.layout_save.set_sensitive(bool(valid_layout and (self.layout_dirty or draft.repaired) and connected and not unmanaged and status.get('local_unlocked') and status.get('peer_unlocked') and not self.busy and not configuring))
         self.layout_reset.set_sensitive(self.layout_dirty and not self.busy)
         self.editor.set_sensitive(not self.busy and not configuring)
+        editable = bool(draft and not self.busy and not configuring)
+        for widget in [self.connection_combo, *self.output_combos.values(), *self.boundary_combos.values(), *self.range_spins.values()]:
+            widget.set_sensitive(editable)
+        self.connection_add.set_sensitive(bool(editable and draft.supports_multiple and len(draft.connection_ids()) < MAX_EDGES))
+        self.connection_remove.set_sensitive(bool(editable and len(draft.connection_ids()) > 1))
         self.network_save.set_sensitive(bool(config and self.settings_dirty and not self.busy and not unmanaged))
         self.preferences_save.set_sensitive(bool(config and self.settings_dirty and not self.busy and not unmanaged))
         self.export_button.set_sensitive(bool(config and config.get('identity') and not self.busy))
@@ -702,11 +725,15 @@ class Window(Gtk.ApplicationWindow):
         for combo in self.language_combos:
             combo.set_sensitive(not self.busy)
         if not connected:
-            self.layout_hint.set_text(_("Connect both computers to synchronize their entry edges. The last known layout is shown for now."))
+            self.layout_hint.set_text(_("Connect both computers to edit and synchronize their screen connections."))
         elif not status.get('local_unlocked') or not status.get('peer_unlocked'):
             self.layout_hint.set_text(_('Unlock both computers to save screen connections.'))
-        elif self.editor.draft and self.editor.draft.repaired:
-            self.layout_hint.set_text(_('An entry display is unavailable. Confirm its replacement and save on both computers.'))
+        elif layout_error:
+            self.layout_hint.set_text(str(OperationError(layout_error)))
+        elif draft and draft.repaired:
+            self.layout_hint.set_text(_('Connections differ between the computers. Review both endpoints before saving.'))
+        elif draft and not draft.supports_multiple:
+            self.layout_hint.set_text(_('Update NiriBridge on both computers to add more screen connections.'))
         elif self.layout_dirty:
             self.layout_hint.set_text(_("You have unsaved changes. Saving briefly restores local control and synchronizes both computers."))
         else:
@@ -726,8 +753,8 @@ class Window(Gtk.ApplicationWindow):
                 return
         def done(result):
             self.update_status(result)
-            self.notice(_("Sharing is paused. Both computers now use their own input devices.") if active else _("Sharing is on. Connecting to the paired computer."))
-        self.work(_("Pausing sharing…") if active else _("Starting sharing…"), lambda: self.model.set_running(not active), done)
+            self.notice(_("Sharing has stopped. Both computers now use their own input devices.") if active else _("Sharing is on. Connecting to the paired computer."))
+        self.work(_("Stopping sharing…") if active else _("Starting sharing…"), lambda: self.model.set_running(not active), done)
 
     def release_control(self, *_unused):
         self.work(_("Restoring local control…"), self.model.release, lambda _unused: self.notice(_("Local control has been restored.")))
@@ -735,32 +762,70 @@ class Window(Gtk.ApplicationWindow):
     def fill_layout_controls(self):
         draft = self.editor.draft
         self.updating = True
+        self.connection_combo.remove_all()
+        if draft:
+            for number, identifier in enumerate(draft.connection_ids(), 1):
+                self.connection_combo.append(identifier, _("Connection {number}").format(number=number))
+            self.connection_combo.set_active_id(draft.selected_id)
         for role, combo in self.output_combos.items():
             combo.remove_all()
             if draft:
                 node = draft.local if role == 'local' else draft.peer
                 for name in node['outputs']:
                     combo.append(name, name)
+                if node['edge']['output'] not in node['outputs']:
+                    name = node['edge']['output']
+                    combo.append(name, _("{output} (unavailable)").format(output=name))
                 combo.set_active_id(node['edge']['output'])
+                self.boundary_combos[role].set_active_id(node['edge']['boundary']['edge'])
                 for key in ('start', 'end'):
                     self.range_spins[role, key].set_value(node['edge']['boundary'][key] * 100)
-        if draft:
-            self.edge_combo.set_active_id(draft.local['edge']['boundary']['edge'])
         self.updating = False
+
+    def connection_selected(self, combo):
+        if self.updating or not self.editor.draft or not combo.get_active_id():
+            return
+        self.editor.draft.select(combo.get_active_id())
+        self.fill_layout_controls()
+        self.editor.queue_draw()
+        self.update_controls()
+
+    def add_connection(self, *_unused):
+        if not self.editor.draft or not self.editor.draft.supports_multiple:
+            return
+        try:
+            self.editor.draft.add_connection()
+        except ValueError as error:
+            self.notice(str(OperationError(str(error))), True)
+            return
+        self.canvas_changed()
+        self.editor.queue_draw()
+
+    def remove_connection(self, *_unused):
+        if not self.editor.draft:
+            return
+        try:
+            self.editor.draft.remove_connection()
+        except ValueError as error:
+            self.notice(str(OperationError(str(error))), True)
+            return
+        self.canvas_changed()
+        self.editor.queue_draw()
 
     def canvas_changed(self, *_unused):
         self.layout_dirty = True
         self.fill_layout_controls()
         self.update_controls()
 
-    def direction_changed(self, *_unused):
+    def direction_changed(self, combo, role):
         if self.updating or not self.editor.draft:
             return
-        edge = self.edge_combo.get_active_id()
+        edge = combo.get_active_id()
         if edge:
-            self.editor.draft.local['edge']['boundary']['edge'] = edge
-            self.editor.draft.peer['edge']['boundary']['edge'] = OPPOSITE[edge]
+            node = self.editor.draft.local if role == 'local' else self.editor.draft.peer
+            node['edge']['boundary']['edge'] = edge
             self.editor.draft.free_origin = None
+            self.editor.draft.reset_scale()
             self.editor.queue_draw()
             self.layout_dirty = True
             self.update_controls()
@@ -836,13 +901,16 @@ class Window(Gtk.ApplicationWindow):
         if self.updating:
             return
         enabled = switch.get_active()
-        self.work(_("Updating startup preferences…"), lambda: self.model.set_autostart(enabled), lambda data: (self.update_status(data), self.notice(_("Sharing will start automatically with your Niri session.") if enabled else _("Automatic startup is off. The current sharing session is unchanged."))))
+        self.work(_("Updating startup preferences…"), lambda: self.model.set_autostart(enabled), lambda data: (self.update_status(data), self.notice(_("NiriBridge will open when you log in. Click Start sharing when you are ready.") if enabled else _("Automatic startup is off. The current sharing session is unchanged."))))
 
     def permissions_ready(self):
         if not self.info:
             return False
         selected = [d for check, d in self.device_checks if check.get_active()]
-        return bool(selected and self.info['devices'].get('uinput_writable') and all(d.get('readable') or not d.get('available', True) for d in selected))
+        def allowed(device):
+            native_pad = self.gesture_check.get_active() and 'ID_INPUT_TOUCHPAD' in device.get('classes', [])
+            return not device.get('available', True) or (device.get('readable') and (not native_pad or device.get('writable', False)))
+        return bool(selected and self.info['devices'].get('uinput_writable') and all(allowed(d) for d in selected))
 
     def update_permissions(self):
         if not self.info:
@@ -974,7 +1042,7 @@ class Window(Gtk.ApplicationWindow):
     def help_dialog(self, *_unused):
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.CLOSE, text=_("Using NiriBridge"))
         css(dialog, 'niri-bridge')
-        dialog.format_secondary_text(_("1. Export a pairing file on each computer and import it on the other.\n2. One computer waits for a connection; the other connects to its LAN address.\n3. Start sharing, then drag the other computer in Screen connections and save.\n4. Cross the green edge to move the keyboard and gestures with the pointer.\n\nEmergency return: Ctrl + Alt + Shift + Escape\nSharing pauses when either computer locks. Physical input on the receiving computer restores local control.\n\nClosing the interface does not stop background sharing."))
+        dialog.format_secondary_text(_("1. Export a pairing file on each computer and import it on the other.\n2. One computer waits for a connection; the other connects to its LAN address.\n3. Start sharing, then drag the other computer in Screen connections and save.\n4. Cross a marked entry edge to move the keyboard and gestures with the pointer.\n\nEmergency return: Ctrl + Alt + Shift + Escape\nSharing pauses when either computer locks. Physical input on the receiving computer restores local control.\n\nOpening NiriBridge does not start sharing. Closing the window keeps the tray; quitting from the tray stops sharing."))
         dialog.run()
         dialog.destroy()
 
@@ -982,16 +1050,16 @@ class Window(Gtk.ApplicationWindow):
         application = self.get_application()
         if application.tray is not None:
             self.tray = application.tray
-            self.tray.update('NiriBridge', (_('Open NiriBridge'), _('Pause sharing'), _('Quit the interface')), False)
+            self.tray.update('NiriBridge', (_('Open NiriBridge'), _('Stop sharing'), _('Quit NiriBridge')), False)
             return
         try:
             if Tray.available():
                 application.tray = Tray(HERE / 'assets/niri-bridge.svg',
                     lambda: application.window.present_from_user(),
-                    lambda: application.window.toggle(), application.quit)
+                    lambda: application.window.toggle(), application.request_quit)
                 application.hold()
                 self.tray = application.tray
-                self.tray.update('NiriBridge', (_('Open NiriBridge'), _('Pause sharing'), _('Quit the interface')), False)
+                self.tray.update('NiriBridge', (_('Open NiriBridge'), _('Stop sharing'), _('Quit NiriBridge')), False)
         except (GLib.Error, OSError):
             self.tray = None
 
@@ -1008,7 +1076,7 @@ class Window(Gtk.ApplicationWindow):
         return True
 
     def quit_ui(self):
-        self.get_application().quit()
+        self.get_application().request_quit()
 
     def on_destroy(self, *_unused):
         self.alive = False
@@ -1063,6 +1131,13 @@ class Application(Gtk.Application):
         self.render_dir = render_dir
         self.window = None
         self.tray = None
+        self.quit_pending = False
+        self.backend_stopped = False
+        quit_action = Gio.SimpleAction.new('quit', None)
+        quit_action.connect('activate', self.request_quit)
+        self.add_action(quit_action)
+        self.signal_sources = [GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, number, self._request_signal_quit)
+                               for number in (signal.SIGTERM, signal.SIGINT)]
         self.connect('activate', self.activate_window)
         self.connect('shutdown', self.shutdown_ui)
 
@@ -1082,7 +1157,59 @@ class Application(Gtk.Application):
             self.window = Window(self, self.model, self.render_dir)
         self.window.present_from_user()
 
+    def request_quit(self, *_unused):
+        if self.quit_pending:
+            return
+        self.quit_pending = True
+        if self.window:
+            self.window.present_from_user()
+        self._quit_when_ready()
+
+    def _request_signal_quit(self):
+        self.request_quit()
+        return True
+
+    def _quit_when_ready(self):
+        window = self.window
+        if not window or not window.alive:
+            self.quit_pending = False
+            return False
+        if window.busy:
+            GLib.timeout_add(100, self._quit_when_ready)
+            return False
+        if (window.settings_dirty or window.layout_dirty) and not window.confirm(
+                _('Quit without saving?'), _('Unsaved edits will be discarded. Sharing will stop before NiriBridge quits.'), _('Quit NiriBridge')):
+            self.quit_pending = False
+            return False
+
+        def stop():
+            try:
+                return self.model.stop_for_exit()
+            except Exception:
+                self.quit_pending = False
+                raise
+
+        def stopped(result):
+            window.update_status(result)
+            self.backend_stopped = True
+            self.quit()
+
+        window.work(_('Stopping sharing before quitting…'), stop, stopped)
+        return False
+
     def shutdown_ui(self, *_unused):
+        for source in self.signal_sources:
+            GLib.source_remove(source)
+        self.signal_sources = []
+        if not self.backend_stopped:
+            # Covers an application-level shutdown that did not originate from
+            # the tray. The ordinary quit path waits asynchronously and keeps
+            # the interface open if the backend cannot be stopped.
+            try:
+                self.model.stop_for_exit()
+                self.backend_stopped = True
+            except OperationError:
+                pass
         if self.tray:
             self.tray.close()
             self.tray = None

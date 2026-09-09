@@ -22,7 +22,7 @@ class InstallationTests(unittest.TestCase):
         self.user.mkdir()
         self.source = self.root / 'source'
         self.prefix = self.user / 'application files %'
-        for name in ['bin/niri-bridge', 'scripts/device-access.py', 'scripts/uninstall.py',
+        for name in ['bin/niri-bridge', 'scripts/device-access.py', 'scripts/uninstall.py', 'scripts/lifecycle.py',
                      'LICENSE', 'COPYRIGHT', 'THIRD_PARTY_NOTICES.md', 'README.md',
                      *['ui/' + item for item in install.UI_FILES]]:
             path = self.source / name
@@ -32,6 +32,7 @@ class InstallationTests(unittest.TestCase):
         template = self.source / 'service/niri-bridge.service'
         template.parent.mkdir(parents=True)
         template.write_text((install.ROOT / 'service/niri-bridge.service').read_text())
+        (template.parent / 'niri-bridge-ui.service').write_text((install.ROOT / 'service/niri-bridge-ui.service').read_text())
         self.calls = []
         actual_run = subprocess.run
         def run(args, **kwargs):
@@ -45,6 +46,10 @@ class InstallationTests(unittest.TestCase):
         self.patches.enter_context(mock.patch('pathlib.Path.home', return_value=self.user))
         self.patches.enter_context(mock.patch('os.geteuid', return_value=1000))
         self.patches.enter_context(mock.patch('subprocess.run', side_effect=run))
+        self.close_ui = self.patches.enter_context(mock.patch('lifecycle.close_interface'))
+        self.stop = self.patches.enter_context(mock.patch('lifecycle.stop_sharing'))
+        self.model = self.patches.enter_context(mock.patch('lifecycle.desktop_model'))
+        self.model.return_value.service.return_value = {'UnitFileState': 'disabled'}
         self.patches.enter_context(mock.patch('sys.stdout', new=io.StringIO()))
 
     def tearDown(self):
@@ -88,11 +93,12 @@ class InstallationTests(unittest.TestCase):
         self.install()
         edited = self.prefix / 'share/niri-bridge/ui/model.py'
         edited.write_text('# a user edit\n')
+        self.calls.clear()
         self.remove()
         self.assertEqual(self.unit.read_text(), '# user-customized service\n')
         self.assertEqual(edited.read_text(), '# a user edit\n')
         self.assertTrue((self.prefix / install.MANIFEST).is_file())
-        self.assertFalse(any('disable' in call for call in self.calls))
+        self.assertFalse(any('disable' in call and 'niri-bridge.service' in call for call in self.calls))
 
     def test_unexpected_manifest_path_rejects_removal_before_any_delete(self):
         self.install()
@@ -116,6 +122,59 @@ class InstallationTests(unittest.TestCase):
             self.remove()
         self.assertEqual(external.read_text(), 'private user work')
         self.assertTrue((self.prefix / 'bin/niri-bridge').is_file())
+
+
+
+    def test_upgrade_backs_up_edited_files_and_configuration_without_private_keys(self):
+        self.install()
+        edited = self.prefix / 'share/niri-bridge/ui/model.py'
+        edited.write_text('# local edit to retain')
+        config = self.user / '.config/niri-bridge/config.toml'
+        config.parent.mkdir(parents=True)
+        config.write_text('user settings')
+        (config.parent / 'identity.key.pem').write_text('synthetic secret fixture')
+        self.install()
+        backup = next((self.user / '.local/state/niri-bridge/backups').iterdir())
+        self.assertEqual(backup.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((backup / 'application/share/niri-bridge/ui/model.py').read_text(), '# local edit to retain')
+        self.assertEqual((backup / 'config.toml').read_text(), 'user settings')
+        self.assertFalse(list(backup.rglob('*.pem')))
+
+    def test_open_legacy_interface_blocks_upgrade_before_files_change(self):
+        self.install()
+        destination = self.prefix / 'bin/niri-bridge'
+        before = destination.read_bytes()
+        (self.source / 'bin/niri-bridge').write_text('# upgrade candidate')
+        self.close_ui.side_effect = RuntimeError('Save edits and quit first')
+        with self.assertRaises(SystemExit):
+            self.install()
+        self.assertEqual(destination.read_bytes(), before)
+
+    def test_failed_input_handoff_blocks_upgrade_before_files_change(self):
+        self.install()
+        destination = self.prefix / 'bin/niri-bridge'
+        before = destination.read_bytes()
+        (self.source / 'bin/niri-bridge').write_text('# upgrade candidate')
+        self.stop.side_effect = RuntimeError('Input is still busy')
+        with self.assertRaises(SystemExit):
+            self.install()
+        self.assertEqual(destination.read_bytes(), before)
+
+    def test_old_login_preference_migrates_to_interface_without_starting_sharing(self):
+        self.model.return_value.service.return_value = {'UnitFileState': 'enabled'}
+        self.install()
+        self.assertIn(['systemctl', '--user', 'disable', 'niri-bridge.service'], self.calls)
+        self.assertIn(['systemctl', '--user', 'enable', 'niri-bridge-ui.service'], self.calls)
+        self.assertFalse(any(action in call for call in self.calls for action in ('start', 'restart', 'try-restart', '--now')))
+
+    def test_package_desktop_and_login_use_update_launcher(self):
+        with mock.patch('sys.argv', ['install.py', '--prefix', str(self.prefix), '--package']):
+            install.main()
+        desktop = (self.prefix / 'share/applications/org.niribridge.NiriBridge.desktop').read_text()
+        unit = (self.user / '.config/systemd/user/niri-bridge-ui.service').read_text()
+        self.assertIn('Exec="/usr/bin/niri-bridge-ui"', desktop)
+        self.assertIn('ExecStart="/usr/bin/niri-bridge-ui"', unit)
+        self.assertTrue(json.loads((self.prefix / install.MANIFEST).read_text())['package'])
 
 
 if __name__ == '__main__':

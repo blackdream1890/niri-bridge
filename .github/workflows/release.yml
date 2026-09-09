@@ -101,7 +101,9 @@ jobs:
         if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/*.tar.gz
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.deb
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -115,7 +117,9 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Early beta for Ubuntu 26.04, Niri 26.04 and Linux x86_64.
 
-          Download the binary archive and verify it with SHA256SUMS. Extract it and run `python3 scripts/install.py` as your desktop user. Install the same version on both computers.
+          Download the Ubuntu amd64 `.deb` package and verify it with SHA256SUMS. Open it with your system package installer, then open NiriBridge from the application launcher. The portable archive remains available with `python3 scripts/install.py`. Install the same version on both computers.
+
+          Opening the interface leaves sharing stopped. Click Start sharing on both computers when ready. Quitting from the tray stops sharing. Upgrades preserve settings and identities and automatically back up the previous application files.
 
           The corresponding-source archive contains the locked Rust dependencies. See README and CHANGELOG for features, setup instructions, recovery and known limitations.
 

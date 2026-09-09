@@ -128,12 +128,12 @@ def list_devices(config):
             seen.add(str(node))
             result.append({'path': str(path), 'name': name,
                            'classes': info['classes'], 'selected': str(node) in selected_nodes,
-                           'readable': os.access(path, os.R_OK), 'available': True})
+                           'readable': os.access(path, os.R_OK), 'writable': os.access(path, os.W_OK), 'available': True})
         except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
             if str(path) in selected and str(path) not in seen:
                 seen.add(str(path))
                 result.append({'path': str(path), 'name': '暂未连接的设备', 'classes': [],
-                               'selected': True, 'readable': False, 'available': False})
+                               'selected': True, 'readable': False, 'writable': False, 'available': False})
             continue
     print(json.dumps({'devices': result, 'uinput_writable': os.access('/dev/uinput', os.W_OK)}))
 

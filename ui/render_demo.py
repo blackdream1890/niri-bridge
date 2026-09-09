@@ -8,6 +8,7 @@ from unittest import mock
 
 from app import Application, GLib
 from test_ui import FakeModel
+from canvas import LayoutDraft
 
 
 def main():
@@ -19,12 +20,18 @@ def main():
     for name in ('overview', 'layout', 'pair', 'preferences'):
         (args.output / (name + '.png')).unlink(missing_ok=True)
     model = FakeModel()
+    draft = LayoutDraft(model.data['status']['local'], model.data['status']['peer'])
+    draft.add_connection()
+    for role in ('local', 'peer'):
+        model.data['status'][role]['edges'] = getattr(draft, role)['edges']
+    model.data['config']['edges'] = draft.local['edges']
     app = Application(model, language=args.language)
     app.set_application_id('org.niribridge.NiriBridge.Demo')
     def ready():
         window = app.window
         if window.info is None or window.busy:
             return True
+        window.connection_combo.set_active_id(draft.selected_id)
         window.resize(1120, 1080)
         window.render_dir = args.output
         GLib.timeout_add(300, window.render_pages)
@@ -35,7 +42,7 @@ def main():
             app.quit()
             return False
         return True
-    with mock.patch('app.Window.setup_tray'):
+    with mock.patch('app.Window.setup_tray'), mock.patch.object(model, 'stop_for_exit', side_effect=model.poll):
         app.connect('activate', lambda *_: GLib.timeout_add(100, ready))
         try:
             status = app.run([sys.argv[0]])

@@ -1,0 +1,14 @@
+[Unit]
+Description=NiriBridge desktop interface
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/niri-bridge-ui
+Restart=no
+TimeoutStopSec=20
+UMask=0077
+
+[Install]
+WantedBy=graphical-session.target

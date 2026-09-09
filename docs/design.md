@@ -4,7 +4,7 @@ English · [简体中文](design.zh-CN.md)
 
 ## Components
 
-The Rust service owns input capture, authenticated transport, destination injection, recovery and configuration synchronization. The Python/GTK desktop interface owns user interaction and communicates through a private Unix control socket. Closing or changing the language of the interface leaves the sharing service running.
+The Rust service owns input capture, authenticated transport, destination injection, recovery and configuration synchronization. The Python/GTK desktop interface owns user interaction and communicates through a private Unix control socket. Opening the interface leaves sharing stopped until Start sharing is selected. Window close hides to the tray, while tray quit waits for the managed backend to stop. Changing the interface language retains the sharing state.
 
 | Input | Source | Destination |
 | --- | --- | --- |
@@ -28,7 +28,11 @@ Niri handles three- and four-finger desktop gestures before delivering client po
 
 Native touchpad readiness uses asynchronous file-descriptor notifications. Original frames use `CLOCK_MONOTONIC`; local replay retains their timestamps, while remote replay maps them to the destination clock and preserves frame intervals. This avoids both an extra fixed polling delay and acceleration changes caused by replaying queued frames with collapsed timestamps.
 
-Initial touchpad ownership waits for all fingers to lift so the original compositor device is neutral. Current contacts are synchronized when the destination changes. Ending a session releases contacts and buttons, and dropping the router releases physical device ownership. Selected physical keyboards are read without an exclusive grab.
+Initial touchpad ownership waits for all fingers and buttons to be released so the original compositor reader is neutral. Current contacts are synchronized when the destination changes. Ending a session releases virtual contacts and buttons. Physical handoff privately clears contacts and changes bounded axis values while grabbed, then announces neutral axes after ungrabbing. This updates the original reader's slot selection even when the kernel would otherwise filter an unchanged `ABS_MT_SLOT`. Only locally generated neutral handoff data is written to a selected physical touchpad; network payloads are never written there. Selected physical keyboards remain read-only and are not exclusively grabbed.
+
+An older backend can already have left a ghost contact in a different compositor slot. The explicit `restore-input` helper, used by upgrade and abnormal-stop recovery, waits for physical idle and gains exclusive ownership before forcing neutral endings for every contact slot. Contact starts stay private under that grab. This legacy recovery may produce one-time libevdev duplicate-ending diagnostics for slots that were already idle; ordinary fixed-backend handoff does not require those extra endings. The VM test reproduces the old stale-slot failure and verifies subsequent native pointer and gesture recognition.
+
+The installer and package updater share the same stop-and-recover path with the UI model. A legacy interface without a quit action must be saved and closed before application files are replaced. Updates keep private automatic backups, preserve pairing identities and leave sharing stopped. Login startup opens the interface through its own user service. Package hooks run bundled migration code as each desktop user; they never execute user-controlled application code as root.
 
 The source begins remote control only after pointer lock, keyboard focus and shortcut inhibition are ready. Held keyboard states are synchronized on entry. Keys held on more than one selected keyboard are aggregated so the first device's release does not release another device's still-held key.
 
@@ -43,6 +47,15 @@ The user control directory is private, the socket has mode 0600, and peer creden
 Display metadata is refreshed outside the input loop and sent over the paired encrypted connection. The interface keeps drafts separate from live state. Dragging a computer changes the proposed cross-computer edge mapping while retaining its internal monitor topology.
 
 A paired layout save prepares and validates both sides against their configuration revisions and active outputs. Configuration writes retain comments, are atomic per file and preserve an initial UI backup. Success is reported only after both sides acknowledge their saved settings. The input connection is then re-established using the new entry settings. Conflicting edits are rejected. A connection failure during commit may leave confirmation ambiguous; this is reported for review after reconnection rather than hidden behind a success message.
+
+Each screen connection has a stable ID shared by both configurations. Protocol 5
+entry and return messages carry that ID and a normalized position, so array order
+does not determine the destination. Return can use a different connection from
+entry. The receiver selects the connection's output before placing the pointer;
+held input must be released before switching outputs. A single capture worker
+owns all enabled edge surfaces and permits only one active capture. Output
+changes release active capture before the remaining valid connections are armed
+again.
 
 Pairing is a separate explicit operation. Public certificate data is frozen and normalized, its displayed fingerprint is bound to the import, and private keys are never exported. Importing a new peer does not silently change physical device access or firewall authorization.
 

@@ -47,6 +47,15 @@ Coverage includes capture readiness, keys/buttons/scroll, return edges, ordinary
 
 The desktop-control integration test sends a real local UI API request through the shared coordinator, across mutually authenticated TLS, and checks both configuration files. It verifies successful paired saves and rejects stale revisions or unavailable peer outputs without changing either configuration.
 
+The multiple-connection suite runs two edge pairs in both directions, with the
+configuration order reversed on one peer. It verifies returning through the
+other connection, the actual pointer position delivered to an isolated observer,
+and released keyboard state after focus returns. The UI suite verifies adding,
+selecting and removing pairs, overlap rejection and draft preservation across
+language changes. Configuration tests cover migration from `[edge]`, comment
+preservation, connection ordering and transaction-lock release. These checks do
+not replace multi-monitor physical acceptance.
+
 The fixtures' keyboard injection and physical activity/lock markers are controlled test backends. They do not by themselves prove real uinput, logind signals or all touchpad gestures. Each fixture cleans up its own processes and temporary files.
 
 ## Read-only diagnosis
@@ -84,3 +93,30 @@ Use the source computer's profile on the destination. The probe creates a virtua
 The initial two computers have user-confirmed bidirectional keyboard/pointer control, native three/four-finger gesture forwarding and restored touchpad responsiveness after the event-timing correction. Both user services were enabled and restarted successfully. Physical takeover was also observed in the real service logs.
 
 The 0.2 desktop interface has separate widget, language and paired-file transaction tests. Both installed desktops passed actual tray registration, menu loading, opening, pause/start and quit checks. Configuration and startup state were preserved, and locked sessions correctly disabled screen saves. With both sessions unlocked, real screen-entry saves initiated on either installed desktop updated both files successfully. The original configurations were restored byte-for-byte and both sides reconnected. Keep this evidence separate from simulated UI screenshots. Long suspend cycles, all Chinese editing scenarios, extended mouse buttons and every combined gesture still need broader acceptance.
+
+## Isolated Linux kernel and libinput handoff
+
+The kernel regression runs in QEMU with no host input devices, display, network,
+monitor or shared filesystem. Both the Rust fixture and C observer refuse to run
+without the dedicated guest boot marker. Install `qemu-system-x86`,
+`busybox-static`, `libinput-dev` and `libudev-dev`; provide a readable Ubuntu kernel
+image with built-in uinput support. The CI image extracts its pinned test kernel
+from the signed Ubuntu package repository without installing it as a host kernel.
+
+```sh
+python3 -B scripts/test-kernel-input.py --kernel /path/to/test-vmlinuz
+```
+
+The test checks all 250 initial/captured/next-slot and held-contact combinations,
+then reproduces a legacy ungrab followed by a stroke that leaves a ghost contact.
+A real libinput observer verifies repeated pointer motion, three/four-finger
+swipes and absence of synthetic button, motion or gesture starts during handoff,
+with tapping enabled. Ordinary handoffs must generate no input-state errors.
+Legacy recovery may diagnose duplicate endings once; subsequent gestures must
+work without further errors. The test never opens the running desktop's devices.
+
+Python lifecycle tests simulate service and socket state, covering idle first
+launch, stop-before-exit ordering, legacy and abnormal-exit recovery, refusal to
+manage an independent process, private upgrade backups, startup migration and
+preservation of customized launchers and files. UI tests separately exercise
+Start/Stop, tray quit failure and closing the window to the tray.

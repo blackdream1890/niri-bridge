@@ -39,3 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-noto-core fonts-noto-cjk pkexec shellcheck \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
+
+# Boot only a disposable test kernel; no host /dev/input, /dev/uinput, desktop
+# sockets, network or shared filesystems are attached to the guest.
+RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86 busybox-static \
+    && mkdir -p /opt/kernel-test/packages /opt/kernel-test/unpacked \
+    && cd /opt/kernel-test/packages \
+    && apt-get download linux-image-7.0.0-31-generic=7.0.0-31.31 \
+    && dpkg-deb --extract linux-image-*.deb /opt/kernel-test/unpacked \
+    && rm -rf /opt/kernel-test/packages /var/lib/apt/lists/*

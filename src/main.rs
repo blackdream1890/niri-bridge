@@ -32,6 +32,11 @@ enum Command {
     },
     /// Read the active graphical session's lock state without changing it.
     CheckSession,
+    /// Restore selected physical touchpads after a stopped legacy backend. Changes input state.
+    RestoreInput {
+        #[arg(long)]
+        config: PathBuf,
+    },
     /// Run the paired keyboard and pointer bridge in the current graphical session.
     Run {
         #[arg(long)]
@@ -91,6 +96,21 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             "Session state: {:?}",
             niri_bridge::session::check_current()?
         ),
+        Command::RestoreInput { config } => {
+            let config = bridge::Config::load(&config)?;
+            if let Ok(path) = niri_bridge::control::socket_path() {
+                anyhow::ensure!(
+                    std::os::unix::net::UnixStream::connect(path).is_err(),
+                    "Stop NiriBridge before restoring local touchpad input"
+                );
+            }
+            let restored = if config.native_touchpads {
+                niri_bridge::touchpad::restore_local_inputs(&config.activity_devices)?
+            } else {
+                0
+            };
+            println!("Restored {restored} selected physical touchpad(s).");
+        }
         Command::Run { config } => bridge::run(bridge::Config::load(&config)?)?,
         Command::IdentityInit { directory, name } => {
             identity::create(&directory, &name)?;

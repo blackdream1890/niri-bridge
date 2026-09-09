@@ -6,13 +6,15 @@ Keep your keyboard and touchpad gestures with your pointer across two Niri deskt
 
 NiriBridge shares keyboard, mouse and touchpad input between two Ubuntu/Niri/Wayland computers. Each computer renders its own desktop. Move the pointer through a configured screen edge and the keyboard follows automatically; three-finger workspace switching and four-finger overview gestures follow the same destination.
 
-**Version 0.2 adds a native desktop interface** with live connection status, pause/resume controls, pairing, screen arrangement and input preferences. English is the default interface language, with a complete Simplified Chinese catalog. The language follows your desktop by default and can be changed in Preferences without restarting input sharing or losing unsaved edits.
+**Version 0.2 adds a native desktop interface** with live connection status, Start/Stop sharing controls, pairing, screen arrangement and input preferences. English is the default interface language, with a complete Simplified Chinese catalog. The language follows your desktop by default and can be changed in Preferences without restarting input sharing or losing unsaved edits.
 
 This is an early beta for Ubuntu 26.04 and Niri 26.04. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
 
 ## Desktop interface
 
-Download the Ubuntu 26.04 x86_64 archive from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases), verify it against `SHA256SUMS`, and extract it. From the extracted directory:
+Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
+
+The portable x86_64 archive remains available. After installing the [runtime dependencies](docs/setup.md), extract it and run as your desktop user:
 
 ```sh
 python3 scripts/install.py
@@ -21,7 +23,7 @@ niri-bridge-ui
 
 For a source checkout, first run `cargo build --locked --release`. The separate source release archive includes the locked Rust dependencies for an offline Cargo build after installing the required toolchain and system packages.
 
-The installer adds **NiriBridge** to your application launcher. It preserves existing identities, pairing files, settings, device permissions and customized user service definitions. When upgrading a running backend, update both computers together; `--no-restart` can stage the files before restarting both services.
+Opening NiriBridge leaves sharing stopped until you click **Start sharing**. **Stop sharing** keeps the interface open; **Quit NiriBridge** in the tray stops sharing before the application closes. Update both computers together. The installer safely stops the previous version, backs up existing application files and settings, and preserves identities, pairing, input permissions and customized service definitions.
 
 ![NiriBridge overview using demo data](docs/images/en/overview.png)
 
@@ -30,12 +32,12 @@ Screenshots use demo device names, fingerprints and a sample connection round-tr
 The interface provides:
 
 - **Overview:** authenticated connection state, the current control target and measured connection round-trip time.
-- **Screen connections:** drag the other computer's screen group, choose entry displays and adjust entry ranges. Saving synchronizes both computers over their existing encrypted connection.
+- **Screen connections:** add multiple pairs of entry edges, select each pair's displays and ranges, or drag the other computer's screen group to adjust the selected connection. Saving synchronizes all connections over the existing encrypted link.
 - **Devices & pairing:** export the local public pairing file, inspect the other computer's file and verify its fingerprint before trusting it.
 - **Preferences:** choose physical input devices, enable native touchpad gestures, manage automatic startup and select the interface language.
-- **System tray:** open the interface, pause/resume sharing or quit the interface. Closing the window leaves the background sharing service running.
+- **System tray:** open the interface, start/stop sharing or quit NiriBridge. Closing the window hides it in the tray; quitting from the tray stops sharing.
 
-The UI manages the standard `niri-bridge.service` user service. A manually started instance is identified separately so the interface can avoid acting on the wrong process.
+The UI manages the standard `niri-bridge.service` user service. The login preference starts only the interface through `niri-bridge-ui.service`; sharing is started explicitly. A manually started instance is identified separately so the interface can avoid acting on the wrong process.
 
 ## Pair and connect
 
@@ -63,7 +65,7 @@ The complete [installation and operating guide](docs/setup.md) covers dependenci
 - Sharing pauses when either session is locked, inactive or unavailable. Unlocking allows a new crossing without automatically resuming the previous capture.
 - Existing KDE Connect clipboard synchronization can continue. NiriBridge does not add a second clipboard mechanism.
 
-To stop the background service on a computer:
+Choose **Stop sharing** or **Quit NiriBridge** from the tray. The command-line equivalent for stopping sharing is:
 
 ```sh
 systemctl --user stop niri-bridge.service

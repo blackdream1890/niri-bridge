@@ -8,7 +8,7 @@ use anyhow::{Context, Result, ensure};
 use std::{
     collections::BTreeMap,
     os::{fd::AsRawFd, unix::net::UnixStream},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum, delegate_noop,
@@ -26,6 +26,7 @@ struct State {
 }
 
 pub struct Pointer {
+    socket: PathBuf,
     connection: Connection,
     pointer: pointer::ZwlrVirtualPointerV1,
     queue: wayland_client::EventQueue<State>,
@@ -61,6 +62,7 @@ impl Pointer {
         let output_id = output.id().protocol_id();
         connection.flush()?;
         Ok(Self {
+            socket: socket.to_path_buf(),
             connection,
             pointer,
             queue,
@@ -71,6 +73,14 @@ impl Pointer {
 }
 
 impl InputSink for Pointer {
+    fn select_output(&mut self, output: &str) -> Result<()> {
+        // The virtual-pointer output binding is immutable. Reconnect only at a
+        // boundary placement, after held input has been released, to also pick
+        // up outputs that were unplugged and reconnected under the same name.
+        let next = Self::connect(&self.socket, output)?;
+        *self = next;
+        Ok(())
+    }
     fn emit(&mut self, event: &InputEvent) -> Result<()> {
         event.validate()?;
         self.queue.dispatch_pending(&mut self.state)?;
@@ -195,6 +205,9 @@ impl Hybrid {
     }
 }
 impl InputSink for Hybrid {
+    fn select_output(&mut self, output: &str) -> Result<()> {
+        self.pointer.select_output(output)
+    }
     fn emit(&mut self, event: &InputEvent) -> Result<()> {
         match event {
             InputEvent::Touchpad {

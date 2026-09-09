@@ -8,7 +8,7 @@ use crate::{
     input::StopReason,
     manager, niri,
     pointer::Hybrid,
-    protocol::{self, InputEvent, Message},
+    protocol::{self, EdgePosition, InputEvent, Message},
     receiver::{InputSink, Receiver},
     session::{Monitor, Status},
     transport::{self, Identity},
@@ -39,7 +39,8 @@ pub struct Config {
     pub peer_certificate: PathBuf,
     pub peer_name: String,
     pub connection: Connection,
-    pub edge: EdgeConfig,
+    #[serde(alias = "edge", deserialize_with = "deserialize_edges")]
+    pub edges: Vec<EdgeConfig>,
     pub activity_devices: Vec<PathBuf>,
     #[serde(default)]
     pub native_touchpads: bool,
@@ -57,8 +58,70 @@ pub enum Connection {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EdgeConfig {
+    #[serde(default = "default_edge_id")]
+    pub id: String,
     pub output: String,
     pub boundary: Boundary,
+}
+
+pub const MAX_EDGES: usize = 16;
+
+fn default_edge_id() -> String {
+    "default".into()
+}
+
+fn deserialize_edges<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Vec<EdgeConfig>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Edges {
+        One(EdgeConfig),
+        Many(Vec<EdgeConfig>),
+    }
+    Ok(match Edges::deserialize(deserializer)? {
+        Edges::One(edge) => vec![edge],
+        Edges::Many(edges) => edges,
+    })
+}
+
+pub fn valid_edge_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+}
+
+pub fn validate_edges(edges: &[EdgeConfig]) -> Result<()> {
+    ensure!(
+        !edges.is_empty() && edges.len() <= MAX_EDGES,
+        "layout_count_invalid"
+    );
+    let mut ids = BTreeSet::new();
+    for (index, edge) in edges.iter().enumerate() {
+        ensure!(
+            valid_edge_id(&edge.id) && ids.insert(&edge.id),
+            "layout_ids_invalid"
+        );
+        ensure!(
+            !edge.output.is_empty()
+                && edge.output.len() <= 128
+                && !edge.output.chars().any(char::is_control),
+            "layout_invalid"
+        );
+        edge.boundary.validate().context("layout_invalid")?;
+        for previous in &edges[..index] {
+            ensure!(
+                edge.output != previous.output
+                    || edge.boundary.edge != previous.boundary.edge
+                    || edge.boundary.start >= previous.boundary.end
+                    || previous.boundary.start >= edge.boundary.end,
+                "layout_overlap"
+            );
+        }
+    }
+    Ok(())
 }
 
 impl Config {
@@ -75,11 +138,7 @@ impl Config {
                 *file = parent.join(&*file);
             }
         }
-        value.edge.boundary.validate()?;
-        ensure!(
-            !value.edge.output.is_empty(),
-            "Choose the connected output for the boundary"
-        );
+        validate_edges(&value.edges)?;
         ensure!(
             !value.activity_devices.is_empty() && value.activity_devices.len() <= 32,
             "Configure physical input devices for takeover detection"
@@ -103,6 +162,33 @@ async fn shutdown() {
 }
 fn unlocked(status: &watch::Receiver<Status>) -> bool {
     *status.borrow() == Status::Unlocked
+}
+
+fn connection_error_code(error: &anyhow::Error) -> &'static str {
+    if error.chain().any(|cause| {
+        let tls_error = cause.downcast_ref::<rustls::Error>().or_else(|| {
+            cause
+                .downcast_ref::<std::io::Error>()?
+                .get_ref()?
+                .downcast_ref::<rustls::Error>()
+        });
+        matches!(
+            tls_error,
+            Some(
+                rustls::Error::NoApplicationProtocol
+                    | rustls::Error::AlertReceived(rustls::AlertDescription::NoApplicationProtocol)
+            )
+        )
+    }) {
+        "protocol_mismatch"
+    } else if error.chain().any(|cause| {
+        let text = cause.to_string().to_ascii_lowercase();
+        text.contains("certificate") || text.contains("certificat")
+    }) {
+        "authentication_failed"
+    } else {
+        "connection_failed"
+    }
 }
 
 async fn run_async(mut config: Config) -> Result<()> {
@@ -135,8 +221,10 @@ async fn run_async(mut config: Config) -> Result<()> {
                 .as_ref()
                 .and_then(|p| p.canonicalize().ok());
             s.local = desktop;
+            s.peer = None;
             s.role = "local".into();
             s.configuring = false;
+            s.capture_ready = false;
             s.peer_unlocked = None;
             s.latency_ms = None;
         });
@@ -199,17 +287,7 @@ async fn run_async(mut config: Config) -> Result<()> {
                     s.connection = "problem".into();
                     s.role = "local".into();
                     s.configuring = false;
-                    s.reason = Some(
-                        if error.chain().any(|e| {
-                            let text = e.to_string().to_ascii_lowercase();
-                            text.contains("certificate") || text.contains("certificat")
-                        }) {
-                            "authentication_failed"
-                        } else {
-                            "connection_failed"
-                        }
-                        .into(),
-                    );
+                    s.reason = Some(connection_error_code(&error).into());
                 });
                 if error.downcast_ref::<CaptureReleaseFailed>().is_some() {
                     return Err(error);
@@ -244,18 +322,21 @@ pub(crate) struct CaptureTask {
 
 impl CaptureTask {
     pub(crate) fn start(
-        edge: &EdgeConfig,
+        edges: &[EdgeConfig],
         generation: u64,
         sender: mpsc::Sender<StreamEvent>,
     ) -> Self {
         let cancel = Arc::new(AtomicBool::new(false));
-        let options = capture_probe::Options {
-            output: edge.output.clone(),
-            edge: edge.boundary.edge,
-            start: edge.boundary.start,
-            end: edge.boundary.end,
-            seconds: 15,
-        };
+        let options = edges
+            .iter()
+            .map(|edge| capture_probe::Options {
+                output: edge.output.clone(),
+                edge: edge.boundary.edge,
+                start: edge.boundary.start,
+                end: edge.boundary.end,
+                seconds: 15,
+            })
+            .collect();
         let context = StreamContext {
             generation,
             sender,
@@ -307,6 +388,7 @@ enum Role {
     Sending {
         session: u64,
         sequence: u64,
+        edge: usize,
         fraction: f64,
     },
     Receiving {
@@ -397,6 +479,27 @@ fn placement(edge: &EdgeConfig, fraction: f64) -> Result<InputEvent> {
     })
 }
 
+fn place<S: InputSink>(receiver: &mut Receiver<S>, edge: &EdgeConfig, fraction: f64) -> Result<()> {
+    receiver.position_on(&edge.output, &placement(edge, fraction)?)
+}
+
+fn active_edges(local: &control::Desktop, peer: Option<&control::Desktop>) -> Vec<usize> {
+    local
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(index, edge)| {
+            (local.outputs.contains_key(&edge.output)
+                && peer.is_some_and(|peer| {
+                    peer.edges.iter().any(|other| {
+                        other.id == edge.id && peer.outputs.contains_key(&other.output)
+                    })
+                }))
+            .then_some(index)
+        })
+        .collect()
+}
+
 fn wayland_socket() -> Result<PathBuf> {
     let display = std::env::var_os("WAYLAND_DISPLAY").context("WAYLAND_DISPLAY is not set")?;
     let path = PathBuf::from(display);
@@ -419,10 +522,10 @@ async fn run_session<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
 ) -> Result<bool> {
     let outputs = niri::outputs()?;
     let output = if outputs
-        .get(&config.edge.output)
+        .get(&config.edges[0].output)
         .is_some_and(|o| o.logical.is_some())
     {
-        config.edge.output.clone()
+        config.edges[0].output.clone()
     } else {
         outputs
             .into_iter()
@@ -468,6 +571,7 @@ pub async fn coordinate_with_control<
     control: Option<&control::Control>,
 ) -> Result<bool> {
     let config = config.clone();
+    validate_edges(&config.edges)?;
     let mut desktop = control::Desktop::read(&config)?;
     let mut peer_desktop: Option<control::Desktop> = None;
     let mut pending_layout: Option<PendingLayout> = None;
@@ -491,6 +595,10 @@ pub async fn coordinate_with_control<
     }));
     let (capture_tx, mut capture_events) = mpsc::channel(512);
     let mut capture: Option<CaptureTask> = None;
+    let mut capture_armed = false;
+    let mut capture_edges = Vec::new();
+    let mut desktop_epoch = 0u64;
+    let mut capture_epoch = 0u64;
     let mut generation = 0u64;
     let mut next_session = 1u64;
     let mut role = Role::Local;
@@ -542,26 +650,38 @@ pub async fn coordinate_with_control<
     tokio::pin!(exit_signal);
     let outcome=async {
         loop {
-            let layout_ready = desktop.outputs.contains_key(&config.edge.output)
-                && peer_desktop
-                    .as_ref()
-                    .is_some_and(|d| d.outputs.contains_key(&d.edge.output));
-            if !layout_ready && role.session().is_some() {
+            let available_edges = active_edges(&desktop, peer_desktop.as_ref());
+            let layout_ready = !available_edges.is_empty();
+            if (!layout_ready && role.session().is_some()) || (capture.is_some() && capture_epoch != desktop_epoch) {
                 if let Some(session) = role.session() {
                     receiver.end(session)?;
                     send(
                         &mut writer,
                         &Message::End {
                             session,
-                            exit_fraction: None,
+                            exit: None,
                         },
                     )
                     .await?;
                 }
                 stop_capture(&mut capture).await?;
+                if let Role::Sending{edge,fraction,..}=role && local_ready && desktop.outputs.contains_key(&config.edges[edge].output) {
+                    place(&mut receiver, &config.edges[edge], fraction)?;
+                }
                 role = Role::Local;
+                rearm_at=Instant::now()+Duration::from_millis(150);
             }
-            if let Some(c)=control{c.update(|s|{s.role=match role{Role::Local=>"local",Role::Sending{..}=>"sending",Role::Receiving{..}=>"receiving"}.into();s.local_unlocked=local_ready;s.reason=if !layout_ready&&peer_desktop.is_some(){Some("output_unavailable".into())}else{None};s.configuring=pending_layout.is_some();});}
+            if let Some(c)=control{c.update(|s|{
+                s.role=match role{Role::Local=>"local",Role::Sending{..}=>"sending",Role::Receiving{..}=>"receiving"}.into();
+                s.local_unlocked=local_ready;
+                s.reason=if !layout_ready&&peer_desktop.is_some(){
+                    let missing_output=desktop.edges.iter().any(|edge|!desktop.outputs.contains_key(&edge.output))
+                        ||peer_desktop.as_ref().is_some_and(|peer|peer.edges.iter().any(|edge|!peer.outputs.contains_key(&edge.output)));
+                    Some(if missing_output{"output_unavailable"}else{"layout_ids_invalid"}.into())
+                }else{None};
+                s.configuring=pending_layout.is_some();
+                s.capture_ready=capture.is_some()&&capture_armed;
+            });}
             for event in activity.route_touchpads(matches!(role,Role::Sending{..}))? {
                 if let Role::Sending{session,sequence,..}=&mut role {
                     send(&mut writer,&Message::Input{session:*session,sequence:*sequence,event}).await?;
@@ -570,13 +690,18 @@ pub async fn coordinate_with_control<
             }
             if local_ready&&peer_ready&&layout_ready&&pending_layout.is_none()&&capture.is_none()&&Instant::now()>=rearm_at {
                 generation=generation.wrapping_add(1);
-                capture=Some(CaptureTask::start(&config.edge,generation,capture_tx.clone()));
+                capture_edges=available_edges.clone();
+                capture_epoch=desktop_epoch;
+                capture_armed=false;
+                let edges=capture_edges.iter().map(|&index|config.edges[index].clone()).collect::<Vec<_>>();
+                capture=Some(CaptureTask::start(&edges,generation,capture_tx.clone()));
             }
             tokio::select! {
                 biased;
                 _=&mut exit_signal=>return Ok(true),
                 outputs=async {match control{Some(c)=>c.next_outputs().await,None=>std::future::pending().await}}=>{
                     if let Some(outputs)=outputs {
+                        desktop_epoch=desktop_epoch.wrapping_add(1);
                         desktop.outputs=outputs;
                         if let Some(c)=control{c.update(|s|s.local=Some(desktop.clone()));}
                         send(&mut writer,&Message::Desktop{info:desktop.clone()}).await?;
@@ -586,9 +711,9 @@ pub async fn coordinate_with_control<
                     if let Some(command)=command {
                         match command.request {
                             control::Request::Release{..}=>{
-                                if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                                if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit:None}).await?;}
                                 stop_capture(&mut capture).await?;
-                                if let Role::Sending{fraction,..}=role{receiver.position(&placement(&config.edge,fraction)?)?;}
+                                if let Role::Sending{edge,fraction,..}=role{place(&mut receiver,&config.edges[edge],fraction)?;}
                                 role=Role::Local;rearm_at=Instant::now()+Duration::from_millis(150);
                                 let _=command.reply.send(Reply::success(serde_json::json!({})));
                             }
@@ -596,15 +721,15 @@ pub async fn coordinate_with_control<
                                 let prepared=(||->Result<_>{
                                     ensure!(pending_layout.is_none(),"settings_busy");ensure!(local_ready&&peer_ready,"session_locked");layout.validate()?;
                                     let peer=peer_desktop.as_ref().context("peer_offline")?;ensure!(peer.revision==layout.peer_revision,"settings_conflict");
-                                    let path=config.source_path.as_ref().context("config_invalid")?;manager::prepare_edge(path,&layout.local_revision,&layout.local_edge)
+                                    let path=config.source_path.as_ref().context("config_invalid")?;manager::prepare_edges(path,&layout.local_revision,&layout.local_edges)
                                 })();
                                 match prepared {
                                     Ok(prepared)=>{
-                                        if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                                        if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit:None}).await?;}
                                         stop_capture(&mut capture).await?;role=Role::Local;
                                         let id=control::transaction_id()?;
                                         pending_layout=Some(PendingLayout{id:id.clone(),prepared,reply:Some(command.reply),deadline:Instant::now()+Duration::from_secs(6)});
-                                        send(&mut writer,&Message::Layout{message:LayoutMessage::Prepare{id,edge:layout.peer_edge,revision:layout.peer_revision}}).await?;
+                                        send(&mut writer,&Message::Layout{message:LayoutMessage::Prepare{id,edges:layout.peer_edges,revision:layout.peer_revision}}).await?;
                                     }
                                     Err(error)=>{let _=command.reply.send(Reply::failure(manager::error_code(&error)));}
                                 }
@@ -620,7 +745,7 @@ pub async fn coordinate_with_control<
                     send(&mut writer,&Message::LockState{locked:!local_ready}).await?;
                     if !local_ready {
                         activity.suspend();
-                        if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                        if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit:None}).await?;}
                         role=Role::Local;stop_capture(&mut capture).await?;
                         eprintln!("Sharing paused while the graphical session is locked or unavailable.");
                     }
@@ -642,16 +767,16 @@ pub async fn coordinate_with_control<
                     let touchpad_events = activity.take_touchpad_events();
                     if physical&&matches!(role,Role::Receiving{..}) {
                         receiver.physical_activity()?;
-                        if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                        if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit:None}).await?;}
                         role=Role::Local;stop_capture(&mut capture).await?;rearm_at=Instant::now()+Duration::from_millis(150);
                         eprintln!("Physical input took back local control.");
                     }
                     for event in keyboard_events {
                         if forward_keyboard(&mut role, &mut source_keys, &mut writer, event).await? {
-                            if let Role::Sending{session,fraction,..}=role {
-                                send(&mut writer,&Message::End{session,exit_fraction:None}).await?;
+                            if let Role::Sending{session,edge,fraction,..}=role {
+                                send(&mut writer,&Message::End{session,exit:None}).await?;
                                 stop_capture(&mut capture).await?;
-                                receiver.position(&placement(&config.edge,fraction)?)?;
+                                place(&mut receiver,&config.edges[edge],fraction)?;
                             }
                             role=Role::Local;source_keys.clear();rearm_at=Instant::now()+Duration::from_millis(150);
                             break;
@@ -665,7 +790,7 @@ pub async fn coordinate_with_control<
                     }
                     if capture.as_ref().is_some_and(CaptureTask::finished)&&capture_events.is_empty() {
                         stop_capture(&mut capture).await?;
-                        if let Role::Sending{session,..}=role {send(&mut writer,&Message::End{session,exit_fraction:None}).await?;role=Role::Local;}
+                        if let Role::Sending{session,..}=role {send(&mut writer,&Message::End{session,exit:None}).await?;role=Role::Local;}
                         rearm_at=Instant::now()+Duration::from_millis(150);
                     }
                     if last_heartbeat.elapsed()>=Duration::from_millis(200) {
@@ -678,7 +803,11 @@ pub async fn coordinate_with_control<
                     let event=event.context("Capture event channel closed")?;
                     if event.generation!=generation||capture.is_none(){continue;}
                     match event.event {
-                        Event::Started{fraction}=>match role {
+                        Event::Started{edge,fraction}=>{
+                            let edge=*capture_edges.get(edge).context("Capture selected an unknown edge")?;
+                            ensure!(available_edges.contains(&edge), "Capture edge is no longer available");
+                            let selected=&config.edges[edge];
+                            match role {
                             Role::Local if local_ready&&peer_ready=>{
                                 activity.sample()?;
                                 let initial_keys=activity.keyboard_state().unwrap_or_default();
@@ -687,8 +816,8 @@ pub async fn coordinate_with_control<
                                     stop_capture(&mut capture).await?;rearm_at=Instant::now()+Duration::from_millis(150);continue;
                                 }
                                 let session=next_session;next_session=next_session.checked_add(1).context("Session identifiers exhausted")?;
-                                send(&mut writer,&Message::Begin{session,entry_fraction:fraction}).await?;
-                                role=Role::Sending{session,sequence:0,fraction};
+                                send(&mut writer,&Message::Begin{session,entry:EdgePosition{edge_id:selected.id.clone(),fraction}}).await?;
+                                role=Role::Sending{session,sequence:0,edge,fraction};
                                 source_keys.clear();
                                 for code in initial_keys {
                                     forward_keyboard(&mut role,&mut source_keys,&mut writer,InputEvent::Key{code,pressed:true}).await?;
@@ -697,12 +826,13 @@ pub async fn coordinate_with_control<
                             }
                             Role::Receiving{session}=>{
                                 receiver.end(session)?;
-                                send(&mut writer,&Message::End{session,exit_fraction:Some(fraction)}).await?;
+                                send(&mut writer,&Message::End{session,exit:Some(EdgePosition{edge_id:selected.id.clone(),fraction})}).await?;
                                 role=Role::Local;stop_capture(&mut capture).await?;
-                                receiver.position(&placement(&config.edge,fraction)?)?;
+                                place(&mut receiver,selected,fraction)?;
                                 rearm_at=Instant::now()+Duration::from_millis(150);
                             }
                             _=>{stop_capture(&mut capture).await?;}
+                            }
                         },
                         Event::Input(event_input)=>{
                             if physical_keyboard&&matches!(event_input,InputEvent::Key{..}) {continue;}
@@ -716,26 +846,27 @@ pub async fn coordinate_with_control<
                             let previous=role;
                             if let Some(session)=previous.session() {
                                 receiver.end(session)?;
-                                send(&mut writer,&Message::End{session,exit_fraction:None}).await?;
+                                send(&mut writer,&Message::End{session,exit:None}).await?;
                             }
                             role=Role::Local;stop_capture(&mut capture).await?;
-                            if let Role::Sending{fraction,..}=previous && local_ready&&reason=="escape"{receiver.position(&placement(&config.edge,fraction)?)?;}
+                            if let Role::Sending{edge,fraction,..}=previous && local_ready&&reason=="escape"{place(&mut receiver,&config.edges[edge],fraction)?;}
                             if reason=="unsupported_input"{eprintln!("Sharing stopped: this input is not supported by the current backend.");}
                             rearm_at=Instant::now()+Duration::from_millis(150);
                         }
-                        Event::Ready|Event::Armed=>{}
+                        Event::Armed=>{capture_armed=true;}
+                        Event::Ready=>{}
                     }
                 }
                 frame=incoming.recv()=>{
                     let (received_at,message)=frame.context("Paired connection closed or timed out")?;
                     match message {
-                        Message::Desktop{info}=>{peer_desktop=Some(info.clone());if let Some(c)=control{c.update(|s|s.peer=Some(info));}},
+                        Message::Desktop{info}=>{desktop_epoch=desktop_epoch.wrapping_add(1);peer_desktop=Some(info.clone());if let Some(c)=control{c.update(|s|s.peer=Some(info));}},
                         Message::Layout{message}=>match message {
-                            LayoutMessage::Prepare{id,edge,revision}=>{
-                                let prepared=(||->Result<_>{ensure!(pending_layout.is_none(),"settings_busy");ensure!(local_ready&&peer_ready,"session_locked");manager::prepare_edge(config.source_path.as_ref().context("config_invalid")?,&revision,&edge)})();
+                            LayoutMessage::Prepare{id,edges,revision}=>{
+                                let prepared=(||->Result<_>{ensure!(pending_layout.is_none(),"settings_busy");ensure!(local_ready&&peer_ready,"session_locked");manager::prepare_edges(config.source_path.as_ref().context("config_invalid")?,&revision,&edges)})();
                                 match prepared {
                                     Ok(prepared)=>{
-                                        if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                                        if let Some(session)=role.session(){receiver.end(session)?;send(&mut writer,&Message::End{session,exit:None}).await?;}
                                         stop_capture(&mut capture).await?;role=Role::Local;
                                         pending_layout=Some(PendingLayout{id:id.clone(),prepared,reply:None,deadline:Instant::now()+Duration::from_secs(6)});
                                         send(&mut writer,&Message::Layout{message:LayoutMessage::Prepared{id,ok:true,error:None}}).await?;
@@ -792,32 +923,43 @@ pub async fn coordinate_with_control<
                             peer_ready = !locked;receiver.peer_lock(locked)?;if let Some(c)=control{c.update(|s|s.peer_unlocked=Some(peer_ready));}
                             if locked {
                                 activity.suspend();
-                                if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
-                                if let Role::Sending{fraction,..}=role {stop_capture(&mut capture).await?;if local_ready{receiver.position(&placement(&config.edge,fraction)?)?;}}
+                                if let Some(session)=role.session(){send(&mut writer,&Message::End{session,exit:None}).await?;}
+                                if let Role::Sending{edge,fraction,..}=role {stop_capture(&mut capture).await?;if local_ready{place(&mut receiver,&config.edges[edge],fraction)?;}}
                                 role=Role::Local;stop_capture(&mut capture).await?;
                             }
                         }
-                        Message::Begin{session,entry_fraction}=>{
-                            if matches!(role,Role::Local)&&local_ready&&peer_ready&&layout_ready&&pending_layout.is_none()&&!activity.sample()? {
+                        Message::Begin{session,entry}=>{
+                            let edge=config.edges.iter().enumerate().find(|(index,edge)|edge.id==entry.edge_id&&available_edges.contains(index));
+                            if let Some((_,edge))=edge && matches!(role,Role::Local)&&local_ready&&peer_ready&&layout_ready&&pending_layout.is_none()&&!activity.sample()? {
                                 ensure!(receiver.begin(session)?,"Receiver is busy");
-                                receiver.position(&placement(&config.edge,entry_fraction)?)?;
+                                place(&mut receiver,edge,entry.fraction)?;
                                 role=Role::Receiving{session};eprintln!("The paired computer is controlling this desktop.");
                             }else if matches!(role,Role::Receiving{..}){anyhow::bail!("Unexpected overlapping input session");}
-                            else {send(&mut writer,&Message::End{session,exit_fraction:None}).await?;}
+                            else {send(&mut writer,&Message::End{session,exit:None}).await?;}
                         }
                         Message::Input{session,sequence,event}=>{
                             ensure!(received_at.elapsed()<Duration::from_millis(200),"Received input was delayed; restoring local control");
                             if let Role::Receiving{session:current}=role && current==session {
                                 if activity.sample()? {
-                                    receiver.physical_activity()?;send(&mut writer,&Message::End{session,exit_fraction:None}).await?;
+                                    receiver.physical_activity()?;send(&mut writer,&Message::End{session,exit:None}).await?;
                                     role=Role::Local;stop_capture(&mut capture).await?;
                                 }else{receiver.input(session,sequence,&event)?;}
                             }
                         }
-                        Message::End{session,exit_fraction}=>{
+                        Message::End{session,exit}=>{
                             if role.session()==Some(session) {
                                 receiver.end(session)?;stop_capture(&mut capture).await?;
-                                if let Role::Sending{fraction,..}=role && local_ready {receiver.position(&placement(&config.edge,exit_fraction.unwrap_or(fraction))?)?;}
+                                if let Role::Sending{edge,fraction,..}=role && local_ready {
+                                    let (edge,fraction)=match exit {
+                                        Some(exit)=>{
+                                            let (index,edge)=config.edges.iter().enumerate().find(|(_,edge)|edge.id==exit.edge_id).context("Unknown return edge")?;
+                                            ensure!(available_edges.contains(&index), "Return edge is unavailable");
+                                            (edge,exit.fraction)
+                                        }
+                                        None=>(&config.edges[edge],fraction),
+                                    };
+                                    place(&mut receiver,edge,fraction)?;
+                                }
                                 role=Role::Local;rearm_at=Instant::now()+Duration::from_millis(150);eprintln!("Local control restored.");
                             }
                         }
@@ -827,10 +969,104 @@ pub async fn coordinate_with_control<
         }
     }.await;
     reader_task.0.abort();
+    if let Some(control) = control {
+        control.update(|state| state.capture_ready = false);
+    }
     let release = receiver.stop(StopReason::Disconnected);
     activity.suspend();
     let capture_release = stop_capture(&mut capture).await;
     capture_release?;
     release?;
     outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::Edge;
+
+    #[test]
+    fn incompatible_peer_versions_are_reported_separately_from_connection_failures() {
+        for error in [
+            rustls::Error::NoApplicationProtocol,
+            rustls::Error::AlertReceived(rustls::AlertDescription::NoApplicationProtocol),
+        ] {
+            let error =
+                anyhow::Error::from(std::io::Error::other(error)).context("TLS handshake failed");
+            assert_eq!(connection_error_code(&error), "protocol_mismatch");
+        }
+        assert_eq!(
+            connection_error_code(&anyhow::anyhow!("connection refused")),
+            "connection_failed"
+        );
+    }
+
+    fn edge(id: &str, output: &str, side: Edge, start: f64, end: f64) -> EdgeConfig {
+        EdgeConfig {
+            id: id.into(),
+            output: output.into(),
+            boundary: Boundary {
+                edge: side,
+                start,
+                end,
+            },
+        }
+    }
+
+    #[test]
+    fn connection_ranges_reject_ambiguity_but_allow_adjacent_ranges_and_different_sides() {
+        let first = edge("first", "screen", Edge::Top, 0., 0.5);
+        assert!(validate_edges(&[]).is_err());
+        assert!(
+            validate_edges(&[first.clone(), edge("first", "screen", Edge::Left, 0., 1.)]).is_err()
+        );
+        assert!(
+            validate_edges(&[first.clone(), edge("second", "screen", Edge::Top, 0.4, 0.9)])
+                .is_err()
+        );
+        assert!(
+            validate_edges(&[first.clone(), edge("second", "screen", Edge::Top, 0.5, 1.)]).is_ok()
+        );
+        assert!(
+            validate_edges(&[first.clone(), edge("second", "screen", Edge::Left, 0., 1.)]).is_ok()
+        );
+        assert!(validate_edges(&[first, edge("second", "portrait", Edge::Top, 0., 1.)]).is_ok());
+    }
+
+    #[test]
+    fn connections_match_by_id_and_an_unavailable_display_only_disables_its_own_route() {
+        let output: niri::LogicalOutput = serde_json::from_value(serde_json::json!({
+            "x":0,"y":0,"width":1920,"height":1200,"scale":1.6,"transform":"Normal"
+        }))
+        .unwrap();
+        let local = control::Desktop {
+            edges: vec![
+                edge("first", "laptop", Edge::Top, 0., 1.),
+                edge("side", "laptop", Edge::Left, 0., 1.),
+            ],
+            revision: "a".repeat(64),
+            outputs: [("laptop".into(), output)].into(),
+        };
+        let mut peer = control::Desktop {
+            edges: vec![
+                edge("side", "portrait", Edge::Right, 0.7, 1.),
+                edge("first", "landscape", Edge::Bottom, 0.1, 0.6),
+            ],
+            revision: "b".repeat(64),
+            outputs: [("landscape".into(), output), ("portrait".into(), output)].into(),
+        };
+        assert_eq!(active_edges(&local, Some(&peer)), [0, 1]);
+        let mut request = control::LayoutRequest {
+            local_edges: local.edges.clone(),
+            peer_edges: peer.edges.clone(),
+            local_revision: local.revision.clone(),
+            peer_revision: peer.revision.clone(),
+        };
+        assert!(request.validate().is_ok());
+        request.peer_edges[0].id = "unmatched".into();
+        assert!(request.validate().is_err());
+        peer.outputs.remove("portrait");
+        assert_eq!(active_edges(&local, Some(&peer)), [0]);
+        assert!(active_edges(&local, None).is_empty());
+    }
 }

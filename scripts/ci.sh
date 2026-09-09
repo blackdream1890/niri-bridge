@@ -16,6 +16,7 @@ actionlint
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
+python3 -B scripts/test-kernel-input.py --kernel /opt/kernel-test/unpacked/boot/vmlinuz-7.0.0-31-generic --tcg
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 python3 -B ui/test_i18n.py
 GDK_BACKEND=x11 xvfb-run -a -s '-screen 0 1280x1200x24' dbus-run-session -- python3 -W ignore::DeprecationWarning:gi.events -B ui/test_ui.py
@@ -37,6 +38,7 @@ PYUNIT
 cargo build --locked --release
 python3 -B scripts/release.py --binary "$CARGO_TARGET_DIR/release/niri-bridge" --output /output
 runuser -u tester -- python3 -B scripts/smoke-install.py --archive /output/niri-bridge-*-ubuntu26.04-x86_64.tar.gz
+python3 -B scripts/smoke-package.py --package /output/niri-bridge-*-ubuntu26.04-amd64.deb
 # Prove the corresponding-source archive resolves its entire dependency graph
 # offline using its vendor configuration and a clean Cargo cache.
 source_test=$(mktemp -d /tmp/niri-bridge-source-check-XXXXXX)

@@ -49,7 +49,7 @@ use crate::{
 
 pub enum Event {
     Armed,
-    Started { fraction: f64 },
+    Started { edge: usize, fraction: f64 },
     Ready,
     Input(InputEvent),
     Finished { reason: String },
@@ -140,6 +140,16 @@ pub fn run(options: Options) -> Result<Counts> {
     Ok(serde_json::from_str(&output)?)
 }
 
+struct Strip {
+    surface: wl_surface::WlSurface,
+    layer: layer_surface::ZwlrLayerSurfaceV1,
+    output_id: u32,
+    horizontal: bool,
+    extent: u32,
+    armed: bool,
+    pointer_inside: bool,
+}
+
 struct State {
     counts: Counts,
     finished: bool,
@@ -148,8 +158,8 @@ struct State {
     pointer: Option<wl_pointer::WlPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     relative: Option<relative_pointer::ZwpRelativePointerV1>,
-    surface: Option<wl_surface::WlSurface>,
-    layer: Option<layer_surface::ZwlrLayerSurfaceV1>,
+    strips: Vec<Strip>,
+    selected: Option<usize>,
     seat: wl_seat::WlSeat,
     constraints: constraints::ZwpPointerConstraintsV1,
     inhibit_manager: inhibit_manager::ZwpKeyboardShortcutsInhibitManagerV1,
@@ -159,19 +169,19 @@ struct State {
     shm: wl_shm::WlShm,
     buffers: Vec<wl_buffer::WlBuffer>,
     stream: Option<StreamContext>,
-    horizontal: bool,
-    extent: u32,
     ready_reported: bool,
     start_fraction: f64,
     pending_inputs: Vec<InputEvent>,
     pressed_keys: BTreeSet<u16>,
     scroll_source: ScrollSource,
-    armed: bool,
-    pointer_inside: bool,
-    selected_output_id: Option<u32>,
 }
 
 impl State {
+    fn selected_surface(&self) -> Option<&wl_surface::WlSurface> {
+        self.selected
+            .and_then(|index| self.strips.get(index))
+            .map(|strip| &strip.surface)
+    }
     fn publish(&mut self, event: Event) {
         if self.finished {
             return;
@@ -212,6 +222,7 @@ impl State {
         {
             self.ready_reported = true;
             self.publish(Event::Started {
+                edge: self.selected.expect("A ready capture has a selected edge"),
                 fraction: self.start_fraction,
             });
             for event in std::mem::take(&mut self.pending_inputs) {
@@ -227,7 +238,7 @@ impl State {
         self.finished = true;
     }
 
-    fn request_capture(&mut self, qh: &QueueHandle<Self>, fraction: f64) {
+    fn request_capture(&mut self, qh: &QueueHandle<Self>, edge: usize, fraction: f64) {
         if self.requested || self.finished {
             return;
         }
@@ -243,29 +254,37 @@ impl State {
         if self.finished {
             return;
         }
-        let (Some(surface), Some(pointer), Some(layer)) =
-            (&self.surface, &self.pointer, &self.layer)
-        else {
+        let (Some(strip), Some(pointer)) = (self.strips.get(edge), &self.pointer) else {
             return;
         };
+        self.selected = Some(edge);
         self.requested = true;
-        self.inhibitor = Some(
-            self.inhibit_manager
-                .inhibit_shortcuts(surface, &self.seat, qh, ()),
-        );
+        self.inhibitor =
+            Some(
+                self.inhibit_manager
+                    .inhibit_shortcuts(&strip.surface, &self.seat, qh, ()),
+            );
         self.locked = Some(self.constraints.lock_pointer(
-            surface,
+            &strip.surface,
             pointer,
             None,
             constraints::Lifetime::Oneshot,
             qh,
             (),
         ));
-        layer.set_keyboard_interactivity(layer_surface::KeyboardInteractivity::Exclusive);
-        surface.commit();
+        strip
+            .layer
+            .set_keyboard_interactivity(layer_surface::KeyboardInteractivity::Exclusive);
+        strip.surface.commit();
     }
 
-    fn paint(&mut self, width: u32, height: u32, qh: &QueueHandle<Self>) -> Result<()> {
+    fn paint(
+        &mut self,
+        index: usize,
+        width: u32,
+        height: u32,
+        qh: &QueueHandle<Self>,
+    ) -> Result<()> {
         ensure!(
             width > 0 && height > 0 && width <= 32768 && height <= 32768,
             "Invalid capture strip size"
@@ -295,7 +314,11 @@ impl State {
             qh,
             (),
         );
-        let surface = self.surface.as_ref().context("Capture surface missing")?;
+        let surface = &self
+            .strips
+            .get(index)
+            .context("Capture surface missing")?
+            .surface;
         surface.attach(Some(&buffer), 0, 0);
         surface.damage_buffer(0, 0, width as i32, height as i32);
         surface.commit();
@@ -305,8 +328,10 @@ impl State {
     }
 
     fn cleanup(&mut self) {
-        if let Some(layer) = &self.layer {
-            layer.set_keyboard_interactivity(layer_surface::KeyboardInteractivity::None);
+        for strip in &self.strips {
+            strip
+                .layer
+                .set_keyboard_interactivity(layer_surface::KeyboardInteractivity::None);
         }
         if let Some(lock) = self.locked.take() {
             lock.destroy();
@@ -314,11 +339,9 @@ impl State {
         if let Some(inhibitor) = self.inhibitor.take() {
             inhibitor.destroy();
         }
-        if let Some(layer) = self.layer.take() {
-            layer.destroy();
-        }
-        if let Some(surface) = self.surface.take() {
-            surface.destroy();
+        for strip in self.strips.drain(..) {
+            strip.layer.destroy();
+            strip.surface.destroy();
         }
         if let Some(relative) = self.relative.take() {
             relative.destroy();
@@ -331,22 +354,30 @@ impl State {
 
 /// Internal worker. Call through run() to retain the independent timeout watchdog.
 pub fn worker(options: Options) -> Result<Counts> {
-    worker_internal(options, None)
+    worker_internal(vec![options], None)
 }
 
 /// Continuous capture worker for the bridge. Ordinary Escape is forwarded; the emergency
 /// release combination is Ctrl+Alt+Shift+Escape. The owner must service the event queue and cancel.
-pub fn worker_stream(options: Options, context: StreamContext) -> Result<Counts> {
+pub fn worker_stream(options: Vec<Options>, context: StreamContext) -> Result<Counts> {
     worker_internal(options, Some(context))
 }
 
-fn worker_internal(options: Options, stream: Option<StreamContext>) -> Result<Counts> {
-    options.validate()?;
+fn worker_internal(options: Vec<Options>, stream: Option<StreamContext>) -> Result<Counts> {
+    ensure!(
+        !options.is_empty() && options.len() <= crate::bridge::MAX_EDGES,
+        "Invalid capture edge count"
+    );
+    for option in &options {
+        option.validate()?;
+    }
     let limited = stream.is_none();
-    let output = niri::outputs()?
-        .remove(&options.output)
-        .context("Output not found in the Niri session")?;
-    let logical = output.logical.context("The selected output is disabled")?;
+    ensure!(
+        !limited || options.len() == 1,
+        "Capture probes use one edge"
+    );
+    let seconds = options[0].seconds;
+    let outputs = niri::outputs()?;
     let connection = Connection::connect_to_env()?;
     let (globals, mut queue) = registry_queue_init::<State>(&connection)?;
     let qh = queue.handle();
@@ -360,22 +391,17 @@ fn worker_internal(options: Options, stream: Option<StreamContext>) -> Result<Co
         pointer: None,
         keyboard: None,
         relative: None,
-        surface: None,
-        layer: None,
+        strips: Vec::new(),
+        selected: None,
         locked: None,
         inhibitor: None,
         buffers: Vec::new(),
         stream,
-        horizontal: matches!(options.edge, Edge::Top | Edge::Bottom),
-        extent: 1,
         ready_reported: false,
         start_fraction: 0.0,
         pending_inputs: Vec::new(),
         pressed_keys: BTreeSet::new(),
         scroll_source: ScrollSource::Wheel,
-        armed: limited,
-        pointer_inside: false,
-        selected_output_id: None,
         seat: globals.bind(&qh, 1..=9, ())?,
         constraints: globals.bind(&qh, 1..=1, ())?,
         inhibit_manager: globals.bind(&qh, 1..=1, ())?,
@@ -397,73 +423,85 @@ fn worker_internal(options: Options, stream: Option<StreamContext>) -> Result<Co
         state.pointer.is_some() && state.keyboard.is_some(),
         "A keyboard and pointer seat is required"
     );
-    let target = state
-        .outputs
-        .get(&options.output)
-        .context("Output name not found in the Wayland registry")?;
-    let surface = compositor.create_surface(&qh, ());
-    let layer = layers.get_layer_surface(
-        &surface,
-        Some(target),
-        layer_shell::Layer::Overlay,
-        if limited {
-            "niri-bridge-capture-test"
+    for options in options {
+        let logical = outputs
+            .get(&options.output)
+            .context("Output not found in the Niri session")?
+            .logical
+            .context("The selected output is disabled")?;
+        let target = state
+            .outputs
+            .get(&options.output)
+            .context("Output name not found in the Wayland registry")?;
+        let surface = compositor.create_surface(&qh, ());
+        let layer = layers.get_layer_surface(
+            &surface,
+            Some(target),
+            layer_shell::Layer::Overlay,
+            if limited {
+                "niri-bridge-capture-test"
+            } else {
+                "niri-bridge-edge"
+            }
+            .into(),
+            &qh,
+            (),
+        );
+        let horizontal = matches!(options.edge, Edge::Top | Edge::Bottom);
+        let length = if horizontal {
+            logical.width
         } else {
-            "niri-bridge-edge"
-        }
-        .into(),
-        &qh,
-        (),
-    );
-    state.selected_output_id = Some(target.id().protocol_id());
-    let horizontal = matches!(options.edge, Edge::Top | Edge::Bottom);
-    let length = if horizontal {
-        logical.width
-    } else {
-        logical.height
-    };
-    let offset = (options.start * f64::from(length)).floor() as i32;
-    let extent = ((options.end - options.start) * f64::from(length)).floor() as u32;
-    state.extent = extent;
-    ensure!(
-        extent >= 1,
-        "Capture span is narrower than one logical pixel"
-    );
-    use layer_surface::Anchor;
-    let anchor = match options.edge {
-        Edge::Top => Anchor::Top | Anchor::Left,
-        Edge::Bottom => Anchor::Bottom | Anchor::Left,
-        Edge::Left => Anchor::Top | Anchor::Left,
-        Edge::Right => Anchor::Top | Anchor::Right,
-    };
-    layer.set_anchor(anchor);
-    layer.set_margin(
-        if horizontal { 0 } else { offset },
-        0,
-        0,
-        if horizontal { offset } else { 0 },
-    );
-    layer.set_exclusive_zone(-1);
-    layer.set_keyboard_interactivity(layer_surface::KeyboardInteractivity::None);
-    layer.set_size(
-        if horizontal { extent } else { 2 },
-        if horizontal { 2 } else { extent },
-    );
-    state.surface = Some(surface);
-    state.layer = Some(layer);
-    state.surface.as_ref().unwrap().commit();
+            logical.height
+        };
+        let offset = (options.start * f64::from(length)).floor() as i32;
+        let extent = ((options.end - options.start) * f64::from(length)).floor() as u32;
+        ensure!(
+            extent >= 1,
+            "Capture span is narrower than one logical pixel"
+        );
+        use layer_surface::Anchor;
+        let anchor = match options.edge {
+            Edge::Top => Anchor::Top | Anchor::Left,
+            Edge::Bottom => Anchor::Bottom | Anchor::Left,
+            Edge::Left => Anchor::Top | Anchor::Left,
+            Edge::Right => Anchor::Top | Anchor::Right,
+        };
+        layer.set_anchor(anchor);
+        layer.set_margin(
+            if horizontal { 0 } else { offset },
+            0,
+            0,
+            if horizontal { offset } else { 0 },
+        );
+        layer.set_exclusive_zone(-1);
+        layer.set_keyboard_interactivity(layer_surface::KeyboardInteractivity::None);
+        layer.set_size(
+            if horizontal { extent } else { 2 },
+            if horizontal { 2 } else { extent },
+        );
+        surface.commit();
+        state.strips.push(Strip {
+            surface,
+            layer,
+            output_id: target.id().protocol_id(),
+            horizontal,
+            extent,
+            armed: limited,
+            pointer_inside: false,
+        });
+    }
     if !limited {
         // Require a pointer already at the edge to leave and re-enter before capturing.
         queue.roundtrip(&mut state)?;
         queue.roundtrip(&mut state)?;
-        state.armed = !state.pointer_inside;
+        for strip in &mut state.strips {
+            strip.armed = !strip.pointer_inside;
+        }
         state.publish(Event::Armed);
     }
     let started = Instant::now();
     let outcome = (|| -> Result<()> {
-        while !state.finished
-            && (!limited || started.elapsed() < Duration::from_secs(options.seconds))
-        {
+        while !state.finished && (!limited || started.elapsed() < Duration::from_secs(seconds)) {
             if state
                 .stream
                 .as_ref()
@@ -538,8 +576,10 @@ impl Dispatch<wl_output::WlOutput, ()> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if state.surface.is_some()
-            && state.selected_output_id == Some(proxy.id().protocol_id())
+        if state
+            .strips
+            .iter()
+            .any(|strip| strip.output_id == proxy.id().protocol_id())
             && matches!(
                 &event,
                 wl_output::Event::Geometry { .. }
@@ -604,7 +644,11 @@ impl Dispatch<layer_surface::ZwlrLayerSurfaceV1, ()> for State {
                 height,
             } => {
                 layer.ack_configure(serial);
-                if state.paint(width, height, qh).is_err() {
+                let index = state
+                    .strips
+                    .iter()
+                    .position(|strip| strip.layer.id() == layer.id());
+                if index.is_none_or(|index| state.paint(index, width, height, qh).is_err()) {
                     state.finish("surface_error");
                 }
             }
@@ -628,25 +672,36 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 surface,
                 surface_x,
                 surface_y,
-            } if state
-                .surface
-                .as_ref()
-                .is_some_and(|s| s.id() == surface.id()) =>
-            {
-                state.pointer_inside = true;
-                if state.armed {
+            } => {
+                let Some(index) = state
+                    .strips
+                    .iter()
+                    .position(|strip| strip.surface.id() == surface.id())
+                else {
+                    return;
+                };
+                let strip = &mut state.strips[index];
+                strip.pointer_inside = true;
+                if strip.armed {
                     pointer.set_cursor(serial, None, 0, 0);
-                    let along = if state.horizontal {
+                    let along = if strip.horizontal {
                         surface_x
                     } else {
                         surface_y
                     };
-                    state.request_capture(qh, along / f64::from(state.extent));
+                    let fraction = along / f64::from(strip.extent);
+                    state.request_capture(qh, index, fraction);
                 }
             }
-            wl_pointer::Event::Leave { .. } => {
-                state.pointer_inside = false;
-                state.armed = true;
+            wl_pointer::Event::Leave { surface, .. } => {
+                if let Some(strip) = state
+                    .strips
+                    .iter_mut()
+                    .find(|strip| strip.surface.id() == surface.id())
+                {
+                    strip.pointer_inside = false;
+                    strip.armed = true;
+                }
             }
             wl_pointer::Event::Button {
                 button,
@@ -734,8 +789,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
         match event {
             wl_keyboard::Event::Enter { surface, keys, .. }
                 if state
-                    .surface
-                    .as_ref()
+                    .selected_surface()
                     .is_some_and(|s| s.id() == surface.id()) =>
             {
                 state.counts.keyboard_focus_observed = true;

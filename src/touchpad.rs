@@ -13,9 +13,9 @@ use std::{
     io,
     os::{
         fd::{AsFd, AsRawFd, OwnedFd},
-        unix::fs::OpenOptionsExt,
+        unix::fs::{MetadataExt, OpenOptionsExt},
     },
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
 use tokio::io::unix::AsyncFd;
@@ -259,6 +259,104 @@ pub fn validate_frame(events: &[Event]) -> Result<()> {
     Ok(())
 }
 
+/// Build a complete neutral handoff, including axes evdev would otherwise filter out.
+/// The original reader was idle when acquisition began. End contacts privately,
+/// then announce the slot and neutral axes without duplicate tracking-ID endings.
+fn handoff_frames(descriptor: &Descriptor) -> Result<(Vec<Event>, Vec<Event>)> {
+    descriptor.validate()?;
+    ensure!(
+        descriptor.axes.iter().any(|a| matches!(a.code, 53 | 54)
+            && i64::from(a.maximum) - i64::from(a.minimum) > 2 * i64::from(a.fuzz)),
+        "Touchpad coordinates cannot be synchronized"
+    );
+    let mut hidden = Vec::new();
+    let mut neutral = Vec::new();
+    for &code in &descriptor.keys {
+        // Mouse buttons were neutral before acquisition. Do not invent a button
+        // press merely to make a release visible to another input reader.
+        hidden.push(Event::key(code, 0));
+        if code >= 325 {
+            neutral.push(Event::key(code, 0));
+        }
+    }
+    for slot in 0..descriptor.slots() {
+        hidden.push(Event::abs(SLOT, slot as i32));
+        hidden.push(Event::abs(TRACKING, -1));
+        neutral.push(Event::abs(SLOT, slot as i32));
+        neutral.push(Event::abs(TRACKING, -1));
+        for axis in descriptor
+            .axes
+            .iter()
+            .filter(|a| a.code > SLOT && a.code != TRACKING)
+        {
+            hidden.push(Event::abs(axis.code, axis.minimum));
+            hidden.push(Event::abs(axis.code, axis.maximum));
+            neutral.push(Event::abs(axis.code, axis.minimum));
+        }
+    }
+    for axis in descriptor.axes.iter().filter(|a| a.code < SLOT) {
+        hidden.push(Event::abs(axis.code, axis.maximum));
+        neutral.push(Event::abs(axis.code, axis.minimum));
+    }
+    for part in hidden.chunks(256).chain(neutral.chunks(256)) {
+        descriptor.validate_frame(part)?;
+    }
+    Ok((hidden, neutral))
+}
+
+fn write_physical_frame(device: &mut RawDevice, events: &[Event]) -> Result<()> {
+    let mut frame: Vec<_> = events.iter().map(|e| e.kernel(0)).collect();
+    frame.push(evdev::InputEvent::new(0, 0, 0));
+    device.send_events(&frame)?;
+    Ok(())
+}
+
+fn release_physical(device: &mut RawDevice, descriptor: &Descriptor) -> Result<()> {
+    finish_physical_handoff(device, descriptor, false)
+}
+
+fn finish_physical_handoff(
+    device: &mut RawDevice,
+    descriptor: &Descriptor,
+    repair_legacy_reader: bool,
+) -> Result<()> {
+    ensure!(
+        device.is_grabbed(),
+        "Touchpad restoration requires exclusive ownership"
+    );
+    let (mut hidden, neutral) = handoff_frames(descriptor)?;
+    if repair_legacy_reader {
+        // A legacy ungrab may already have left a contact in a different slot
+        // in the compositor. Force an ending for every slot, including those
+        // the kernel thinks are idle. Starts remain private under our grab;
+        // the compositor receives only neutral contact endings. libevdev may
+        // diagnose duplicate endings for slots that were already idle.
+        let tracking = descriptor
+            .axes
+            .iter()
+            .find(|axis| axis.code == TRACKING)
+            .unwrap();
+        let tracking_id = tracking.minimum.max(0);
+        ensure!(
+            tracking_id <= tracking.maximum,
+            "Touchpad tracking IDs cannot be restored"
+        );
+        for slot in 0..descriptor.slots() {
+            hidden.extend([
+                Event::abs(SLOT, slot as i32),
+                Event::abs(TRACKING, tracking_id),
+            ]);
+        }
+        for part in hidden.chunks(256) {
+            descriptor.validate_frame(part)?;
+        }
+    }
+    write_physical_frame(device, &hidden)?;
+    device.ungrab()?;
+    write_physical_frame(device, &neutral)?;
+    Ok(())
+}
+
 /// Current contacts only, used to preserve a stroke as its destination changes.
 struct TouchState {
     slot: usize,
@@ -306,7 +404,7 @@ impl TouchState {
         Ok(state)
     }
     fn idle(&self) -> bool {
-        !self.keys.contains(&TOUCH)
+        self.keys.is_empty()
             && self
                 .contacts
                 .iter()
@@ -484,6 +582,85 @@ struct PhysicalTouchpad {
     grabbed: bool,
     frame: Vec<Event>,
 }
+
+fn open_physical_touchpad(path: &Path) -> Result<Option<(RawDevice, Descriptor)>> {
+    let readable = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)?;
+    let original = readable.metadata()?;
+    let inspected = RawDevice::from_fd(readable.into())?;
+    let is_pad = inspected.properties().contains(PropType::POINTER)
+        && !inspected.properties().contains(PropType::DIRECT)
+        && inspected
+            .supported_keys()
+            .is_some_and(|keys| keys.contains(KeyCode::BTN_TOOL_FINGER));
+    if !is_pad {
+        return Ok(None);
+    }
+    let writable = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .context("Touchpad access must allow safe input restoration")?;
+    let next = writable.metadata()?;
+    ensure!(
+        original.dev() == next.dev()
+            && original.ino() == next.ino()
+            && original.rdev() == next.rdev(),
+        "The touchpad changed while it was being opened"
+    );
+    let device = RawDevice::from_fd(writable.into())?;
+    ensure!(
+        !device
+            .physical_path()
+            .is_some_and(|p| p.starts_with("niri-bridge/")),
+        "A virtual device cannot be a physical touchpad source"
+    );
+    let descriptor = Descriptor::from_device(&device)?;
+    handoff_frames(&descriptor)?;
+    Ok(Some((device, descriptor)))
+}
+
+/// Repair the local input reader after stopping a legacy backend. The selected
+/// physical device must be available for exclusive ownership; no peer data is used.
+pub fn restore_local_inputs(paths: &[PathBuf]) -> Result<usize> {
+    let mut seen = BTreeSet::new();
+    let mut restored = 0;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    for path in paths {
+        let path = match path.canonicalize() {
+            Ok(path) => path,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        if let Some((mut device, descriptor)) = open_physical_touchpad(&path)? {
+            loop {
+                if TouchState::read(&device, &descriptor)?.idle() {
+                    device
+                        .grab()
+                        .context("The touchpad is still in use by another input program")?;
+                    if TouchState::read(&device, &descriptor)?.idle() {
+                        break;
+                    }
+                    device.ungrab()?;
+                }
+                ensure!(
+                    std::time::Instant::now() < deadline,
+                    "Lift all fingers from the touchpad, then try stopping sharing again"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            finish_physical_handoff(&mut device, &descriptor, true)?;
+            restored += 1;
+        }
+    }
+    Ok(restored)
+}
 /// Mirrors locally while idle and forwards the same native touch data while sharing.
 /// Grabbing starts only with all fingers up, so the original compositor device is neutral.
 pub struct Router {
@@ -504,27 +681,10 @@ impl Router {
             if !seen.insert(path.clone()) {
                 continue;
             }
-            let file = OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NONBLOCK)
-                .open(path)?;
-            let device = RawDevice::from_fd(file.into())?;
-            let is_pad = device.properties().contains(PropType::POINTER)
-                && !device.properties().contains(PropType::DIRECT)
-                && device
-                    .supported_keys()
-                    .is_some_and(|keys| keys.contains(KeyCode::BTN_TOOL_FINGER));
-            if !is_pad {
+            let Some((device, descriptor)) = open_physical_touchpad(&path)? else {
                 continue;
-            }
-            ensure!(
-                !device
-                    .physical_path()
-                    .is_some_and(|p| p.starts_with("niri-bridge/")),
-                "A virtual device cannot be a physical touchpad source"
-            );
+            };
             ensure!(pads.len() < 4, "At most four touchpads may be shared");
-            let descriptor = Descriptor::from_device(&device)?;
             let clock = libc::CLOCK_MONOTONIC;
             ensure!(
                 unsafe { libc::ioctl(device.as_raw_fd(), 0x4004_45a0 as libc::c_ulong, &clock) }
@@ -606,7 +766,13 @@ impl Router {
                 }
                 ensure!(pad.frame.len() <= 512, "Touchpad frame is too large");
             }
-            if !pad.grabbed && !pad.device.get_key_state()?.contains(KeyCode::BTN_TOUCH) {
+            if !pad.grabbed
+                && !pad
+                    .device
+                    .get_key_state()?
+                    .iter()
+                    .any(|k| touch_key(k.code()))
+            {
                 pad.device
                     .grab()
                     .context("Cannot acquire the selected touchpad")?;
@@ -627,7 +793,7 @@ impl Router {
                     pad.state = state;
                     pad.grabbed = true;
                 } else {
-                    pad.device.ungrab()?;
+                    release_physical(&mut pad.device, &pad.descriptor)?;
                 }
             }
         }
@@ -677,7 +843,10 @@ impl Drop for Router {
         for pad in &mut self.pads {
             let _ = pad.mirror.reset();
             if pad.grabbed {
-                let _ = pad.device.ungrab();
+                if release_physical(&mut pad.device, &pad.descriptor).is_err() {
+                    eprintln!("The physical touchpad could not be fully restored after sharing.");
+                }
+                pad.grabbed = false;
             }
         }
     }
@@ -686,6 +855,399 @@ impl Drop for Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn handoff_exposes_only_neutral_contacts_and_never_synthetic_button_presses() {
+        let d = descriptor();
+        let (hidden, visible) = handoff_frames(&d).unwrap();
+        assert!(
+            hidden
+                .iter()
+                .filter(|e| e.kind == Kind::Key && e.value != 0)
+                .all(|e| e.code >= 325)
+        );
+        assert!(
+            visible
+                .iter()
+                .filter(|e| e.kind == Kind::Key)
+                .all(|e| e.value == 0)
+        );
+        assert_eq!(
+            visible
+                .iter()
+                .filter(|e| e.code == TRACKING && e.value == -1)
+                .count(),
+            d.slots()
+        );
+        assert!(!visible.iter().any(|e| e.kind == Kind::Key && e.code < 325));
+    }
+
+    #[test]
+    #[ignore = "requires the dedicated isolated kernel VM; never run on a desktop kernel"]
+    fn kernel_handoff_keeps_the_original_reader_synchronized() -> Result<()> {
+        ensure!(
+            std::fs::read_to_string("/proc/cmdline")?
+                .split_whitespace()
+                .any(|p| p == "niri-bridge-kernel-test=1"),
+            "Run this test with scripts/test-kernel-input.py; no devices were created"
+        );
+        fn drain(device: &mut RawDevice) -> Result<Vec<Event>> {
+            let mut result = Vec::new();
+            loop {
+                match device.fetch_events() {
+                    Ok(batch) => {
+                        let batch: Vec<_> = batch.collect();
+                        if batch.is_empty() {
+                            break;
+                        }
+                        for e in batch {
+                            match e.event_type().0 {
+                                1 => result.push(Event::key(e.code(), e.value())),
+                                3 => result.push(Event::abs(e.code(), e.value())),
+                                _ => {}
+                            }
+                        }
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            Ok(result)
+        }
+        fn frame(device: &mut VirtualDevice, events: &[Event]) -> Result<()> {
+            device.emit(&events.iter().map(|e| e.kernel(0)).collect::<Vec<_>>())?;
+            Ok(())
+        }
+        let d = descriptor();
+        let keys: AttributeSet<KeyCode> = d.keys.iter().map(|&code| KeyCode::new(code)).collect();
+        let properties: AttributeSet<PropType> =
+            d.properties.iter().copied().map(PropType).collect();
+        let mut builder = VirtualDevice::builder()?
+            .name("NiriBridge isolated kernel touchpad test")
+            .with_phys(c"niri-bridge/test/kernel-handoff")?
+            .with_keys(&keys)?
+            .with_properties(&properties)?;
+        for axis in &d.axes {
+            builder = builder.with_absolute_axis(&UinputAbsSetup::new(
+                AbsoluteAxisCode(axis.code),
+                AbsInfo::new(
+                    if axis.code == TRACKING {
+                        -1
+                    } else {
+                        axis.minimum
+                    },
+                    axis.minimum,
+                    axis.maximum,
+                    axis.fuzz,
+                    axis.flat,
+                    axis.resolution,
+                ),
+            ))?;
+        }
+        let mut device = builder.build()?;
+        let sys = device.get_syspath()?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let node = loop {
+            if let Some(entry) = std::fs::read_dir(&sys)?
+                .filter_map(Result::ok)
+                .find(|e| e.file_name().to_string_lossy().starts_with("event"))
+            {
+                break std::path::Path::new("/dev/input").join(entry.file_name());
+            }
+            ensure!(
+                std::time::Instant::now() < deadline,
+                "The VM test input node did not appear"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        let open = || -> Result<RawDevice> {
+            Ok(RawDevice::from_fd(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .custom_flags(libc::O_NONBLOCK)
+                    .open(&node)?
+                    .into(),
+            )?)
+        };
+        let mut observer = open()?;
+        let mut owner = open()?;
+        let mut seen = TouchState::new(&d);
+        for initial in 0..d.slots() {
+            for captured in 0..d.slots() {
+                for next in 0..d.slots() {
+                    for held_at_stop in [false, true] {
+                        frame(
+                            &mut device,
+                            &[
+                                Event::abs(SLOT, initial as i32),
+                                Event::abs(TRACKING, 100),
+                                Event::abs(53, 150),
+                                Event::abs(54, 250),
+                                Event::abs(TRACKING, -1),
+                            ],
+                        )?;
+                        seen.apply(&drain(&mut observer)?);
+                        drain(&mut owner)?;
+                        owner.grab()?;
+                        let mut contact = vec![
+                            Event::key(TOUCH, 1),
+                            Event::key(325, 1),
+                            Event::abs(SLOT, captured as i32),
+                            Event::abs(TRACKING, 200),
+                            Event::abs(53, 650),
+                            Event::abs(54, 750),
+                        ];
+                        if !held_at_stop {
+                            contact.extend([
+                                Event::abs(TRACKING, -1),
+                                Event::key(TOUCH, 0),
+                                Event::key(325, 0),
+                            ]);
+                        }
+                        frame(&mut device, &contact)?;
+                        assert!(drain(&mut observer)?.is_empty());
+                        release_physical(&mut owner, &d)?;
+                        let returned = drain(&mut observer)?;
+                        assert!(!returned.iter().any(|e| e.kind == Kind::Key && e.value != 0));
+                        assert!(!returned.iter().any(|e| e.code == TRACKING && e.value >= 0));
+                        seen.apply(&returned);
+                        assert!(seen.idle());
+                        frame(
+                            &mut device,
+                            &[
+                                Event::key(TOUCH, 1),
+                                Event::key(325, 1),
+                                Event::abs(SLOT, next as i32),
+                                Event::abs(TRACKING, 300),
+                                Event::abs(53, 350),
+                                Event::abs(54, 450),
+                                Event::abs(0, 350),
+                                Event::abs(1, 450),
+                            ],
+                        )?;
+                        seen.apply(&drain(&mut observer)?);
+                        let kernel = TouchState::read(&owner, &d)?;
+                        assert_eq!(seen.slot, kernel.slot);
+                        assert!(
+                            seen.contacts == kernel.contacts
+                                && seen.keys == kernel.keys
+                                && seen.axes == kernel.axes,
+                            "handoff differed: initial={initial} captured={captured} next={next} held={held_at_stop}"
+                        );
+                        frame(
+                            &mut device,
+                            &[
+                                Event::abs(TRACKING, -1),
+                                Event::key(TOUCH, 0),
+                                Event::key(325, 0),
+                            ],
+                        )?;
+                        seen.apply(&drain(&mut observer)?);
+                    }
+                }
+            }
+        }
+        println!(
+            "Kernel handoff passed for all initial, captured and next slots, with fingers lifted or held at stop; no synthetic press escaped."
+        );
+        // Reproduce a legacy ungrab followed by a two-finger stroke before the
+        // installer gets ownership. An old reader can retain a ghost contact on
+        // its previous slot even though the physical device is completely idle.
+        fn legacy_stroke(device: &mut VirtualDevice, owner: &mut RawDevice) -> Result<()> {
+            frame(device, &[Event::abs(SLOT, 4), Event::abs(53, 111)])?;
+            owner.grab()?;
+            frame(
+                device,
+                &[
+                    Event::abs(SLOT, 1),
+                    Event::abs(TRACKING, 701),
+                    Event::abs(53, 333),
+                    Event::abs(TRACKING, -1),
+                ],
+            )?;
+            owner.ungrab()?;
+            frame(
+                device,
+                &[
+                    Event::key(TOUCH, 1),
+                    Event::abs(SLOT, 1),
+                    Event::abs(TRACKING, 702),
+                    Event::abs(53, 555),
+                    Event::abs(SLOT, 0),
+                    Event::abs(TRACKING, 703),
+                    Event::abs(53, 666),
+                ],
+            )?;
+            frame(
+                device,
+                &[
+                    Event::abs(SLOT, 0),
+                    Event::abs(TRACKING, -1),
+                    Event::abs(SLOT, 1),
+                    Event::abs(TRACKING, -1),
+                    Event::key(TOUCH, 0),
+                ],
+            )?;
+            Ok(())
+        }
+        legacy_stroke(&mut device, &mut owner)?;
+        seen.apply(&drain(&mut observer)?);
+        assert!(TouchState::read(&owner, &d)?.idle());
+        assert!(
+            !seen.idle(),
+            "The legacy fixture did not reproduce a stale contact"
+        );
+        owner.grab()?;
+        finish_physical_handoff(&mut owner, &d, true)?;
+        let repaired = drain(&mut observer)?;
+        assert!(!repaired.iter().any(|e| e.kind == Kind::Key && e.value != 0));
+        assert!(!repaired.iter().any(|e| e.code == TRACKING && e.value >= 0));
+        seen.apply(&repaired);
+        assert!(
+            seen.idle(),
+            "Legacy recovery left a stale contact in the original reader"
+        );
+        println!(
+            "Legacy recovery cleared a reproduced stale contact without exposing a synthetic press."
+        );
+        // A real libinput instance must also keep pointer motion and three/four
+        // finger recognition after handoff, with tapping enabled. This observer
+        // is built only for the VM and cannot open the host's input devices.
+        {
+            use std::io::{BufRead, BufReader, Write};
+            use std::process::{Command, Stdio};
+            let metadata = std::fs::metadata(&node)?;
+            let database = Path::new("/run/udev/data");
+            std::fs::create_dir_all(database)?;
+            std::fs::write(
+                database.join(format!(
+                    "c{}:{}",
+                    libc::major(metadata.rdev()),
+                    libc::minor(metadata.rdev())
+                )),
+                "E:ID_INPUT=1\nE:ID_INPUT_TOUCHPAD=1\n",
+            )?;
+            let mut native = Command::new("/libinput-observer")
+                .arg(&node)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            let mut commands = native.stdin.take().unwrap();
+            let mut output = BufReader::new(native.stdout.take().unwrap());
+            let mut ready = String::new();
+            output.read_line(&mut ready)?;
+            ensure!(
+                ready.trim() == "READY",
+                "The isolated libinput observer did not initialize"
+            );
+            let mut counts = || -> Result<Vec<u64>> {
+                commands.write_all(b"snapshot\n")?;
+                commands.flush()?;
+                let mut line = String::new();
+                output.read_line(&mut line)?;
+                let values = line
+                    .split_whitespace()
+                    .map(str::parse)
+                    .collect::<std::result::Result<Vec<u64>, _>>()?;
+                ensure!(
+                    values.len() == 6,
+                    "The libinput observer returned an incomplete result"
+                );
+                Ok(values)
+            };
+            fn gesture(
+                device: &mut VirtualDevice,
+                fingers: usize,
+                identity: i32,
+                lift: bool,
+            ) -> Result<()> {
+                for step in 0..11 {
+                    let mut events = vec![Event::key(TOUCH, 1)];
+                    for (count, key) in [(1, 325), (2, 333), (3, 334), (4, 335)] {
+                        events.push(Event::key(key, i32::from(fingers == count)));
+                    }
+                    for slot in 0..fingers {
+                        events.extend([
+                            Event::abs(SLOT, slot as i32),
+                            Event::abs(TRACKING, identity + slot as i32),
+                            Event::abs(53, 200 + slot as i32 * 110 + step * 12),
+                            Event::abs(54, 200 + step * 25),
+                        ]);
+                    }
+                    events.extend([
+                        Event::abs(0, 200 + step * 12),
+                        Event::abs(1, 200 + step * 25),
+                    ]);
+                    frame(device, &events)?;
+                    std::thread::sleep(std::time::Duration::from_millis(12));
+                }
+                if lift {
+                    let mut events = vec![Event::key(TOUCH, 0)];
+                    events.extend([325, 333, 334, 335].map(|code| Event::key(code, 0)));
+                    for slot in 0..fingers {
+                        events.extend([Event::abs(SLOT, slot as i32), Event::abs(TRACKING, -1)]);
+                    }
+                    frame(device, &events)?;
+                    std::thread::sleep(std::time::Duration::from_millis(350));
+                }
+                Ok(())
+            }
+            for cycle in 0..3 {
+                let before = counts()?;
+                gesture(&mut device, 1, 400 + cycle * 30, true)?;
+                gesture(&mut device, 3, 410 + cycle * 30, true)?;
+                gesture(&mut device, 4, 420 + cycle * 30, true)?;
+                let active = counts()?;
+                assert!(
+                    active[0] > before[0] && active[2] > before[2] && active[3] > before[3],
+                    "Native pointer or gesture recognition failed: before={before:?} after={active:?}"
+                );
+                assert_eq!(active[5], 0, "libinput reported an input-state error");
+                drain(&mut owner)?;
+                owner.grab()?;
+                gesture(&mut device, 4, 600 + cycle * 10, false)?;
+                release_physical(&mut owner, &d)?;
+                std::thread::sleep(std::time::Duration::from_millis(350));
+                assert_eq!(
+                    counts()?,
+                    active,
+                    "Touchpad handoff generated pointer, button or gesture input"
+                );
+            }
+            legacy_stroke(&mut device, &mut owner)?;
+            std::thread::sleep(std::time::Duration::from_millis(350));
+            let before_repair = counts()?;
+            owner.grab()?;
+            finish_physical_handoff(&mut owner, &d, true)?;
+            std::thread::sleep(std::time::Duration::from_millis(350));
+            let repaired = counts()?;
+            assert_eq!(
+                &before_repair[..5],
+                &repaired[..5],
+                "Legacy reset leaked input"
+            );
+            gesture(&mut device, 1, 801, true)?;
+            gesture(&mut device, 3, 811, true)?;
+            gesture(&mut device, 4, 821, true)?;
+            let after_repair = counts()?;
+            assert!(
+                after_repair[0] > repaired[0]
+                    && after_repair[2] > repaired[2]
+                    && after_repair[3] > repaired[3]
+            );
+            assert_eq!(
+                after_repair[5], repaired[5],
+                "Legacy reset left recurring input errors"
+            );
+            commands.write_all(b"quit\n")?;
+            ensure!(native.wait()?.success(), "The libinput observer failed");
+            println!(
+                "libinput passed repeated one-finger motion, three/four-finger swipes, and zero input leakage on handoff with tapping enabled."
+            );
+        }
+        Ok(())
+    }
     #[test]
     fn batched_arrivals_keep_hardware_frame_intervals_for_pointer_acceleration() {
         let mut clock = RemoteClock::default();
