@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-beta.3 — Unreleased
+## 0.2.0-beta.3 — 2026-09-09
 
 - Opening the interface leaves sharing stopped until the user starts it. Stopping sharing releases input; quitting from the tray waits for sharing to stop before closing the application.
 - Physical touchpad handoff restores a coherent neutral state to the compositor instead of only releasing the evdev grab. An isolated Linux-kernel test checks all initial, captured and next contact-slot combinations, including contacts held at stop. A real libinput observer checks pointer motion, three/four-finger gestures and input leakage; a separate case reproduces and repairs legacy ghost contacts.
@@ -17,9 +17,12 @@
 
 This version uses **input protocol 5** and must be installed on both computers.
 Keep a configuration backup before upgrading: earlier versions do not read the
-new `[[edges]]` format. Physical acceptance of multiple connections on the initial
-multi-monitor setup is still pending; isolated two-connection tests cover both
-directions, different return edges, mapped positions and held-key cleanup.
+new `[[edges]]` format. Both initial desktops passed upgrade, repeated Start/Stop, window hiding, tray
+quit, idle reopening and reconnection checks. The user confirmed normal local
+touchpad movement and three/four-finger gestures after stopping, plus both
+physical screen connections. Isolated tests also cover different return edges,
+mapped positions and held-key cleanup. Broader hardware and long suspend
+acceptance remain open.
 
 ## 0.2.0-beta.1
 

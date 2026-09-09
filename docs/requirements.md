@@ -51,7 +51,7 @@ The user confirmed the basic bidirectional input behavior. Keep every additional
 - [ ] End-to-end latency and jitter measurements, including high-rate mouse input.
 - [x] Actual screen-entry changes initiated on either installed desktop updated both configuration files; original files were restored byte-for-byte and both sides reconnected.
 - [x] Isolated two-connection tests cover both directions, return through a different connection, mapped return positions and held-key cleanup.
-- [ ] Multiple connections across the physical landscape, portrait and laptop displays.
+- [x] Multiple connections across the physical landscape, portrait and laptop displays, confirmed after the beta.3 upgrade.
 
 Version 0.2 also has widget, translation and paired configuration tests. Real tray open/pause/start/quit behavior, status loading, lock-state controls and preservation of settings/startup state were checked on both installed desktops. Paired-file transaction tests use isolated Niri sessions and mutually authenticated TLS. See [Testing](testing.md) for commands and limitations.
 
@@ -62,4 +62,4 @@ Version 0.2 also has widget, translation and paired configuration tests. Real tr
 - [x] Window close retains the tray and current sharing state.
 - [x] Isolated kernel/libinput checks cover ordinary handoff and legacy ghost-contact recovery.
 - [x] Installation tests cover backups, startup migration, old interfaces and customized files.
-- [ ] Two physical desktops: repeated start/stop, tray quit and upgrade to the release candidate.
+- [x] Two physical desktops: upgrade, repeated start/stop, tray quit, idle reopening and retained settings. The user confirmed local touchpad movement and three/four-finger gestures after stopping.

@@ -120,3 +120,18 @@ launch, stop-before-exit ordering, legacy and abnormal-exit recovery, refusal to
 manage an independent process, private upgrade backups, startup migration and
 preservation of customized launchers and files. UI tests separately exercise
 Start/Stop, tray quit failure and closing the window to the tray.
+
+## 0.2.0-beta.3 physical acceptance
+
+Both installed Ubuntu/Niri desktops were upgraded with the shared installer.
+Configuration hashes and identity-file metadata were unchanged. Repeated Start/Stop
+operations used the real tray callbacks. Closing each application window retained
+the tray and sharing; quitting from each tray stopped the backend and left zero
+NiriBridge virtual input devices. Reopening each interface kept sharing stopped,
+then explicit Start sharing reconnected both configured screen connections.
+
+The user subsequently confirmed one-finger pointer movement, three-finger workspace
+switching, four-finger overview, crossings through both physical connections and
+normal local touchpad operation after Stop sharing. This is acceptance on the
+initial hardware, separate from VM and simulated-widget evidence. Long suspend,
+more device models, extended buttons and combined gestures remain broader tests.
