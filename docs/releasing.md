@@ -38,9 +38,9 @@ From a clean source commit, use an empty output directory:
 docker build --tag niri-bridge-build:release --file packaging/ubuntu26.04.Dockerfile .
 mkdir dist
 docker run --rm --env NIRI_BRIDGE_CI=1 \
-  --mount type=bind,source="$PWD",target=/workspace,readonly \
+  --mount type=bind,source="$PWD",target=/input,readonly \
   --mount type=bind,source="$PWD/dist",target=/output \
-  niri-bridge-build:release bash scripts/ci.sh
+  niri-bridge-build:release bash /input/scripts/container-ci.sh
 ```
 
 The pipeline checks formatting, Clippy, ordinary Rust tests, Python installation

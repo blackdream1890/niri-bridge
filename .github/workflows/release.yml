@@ -66,9 +66,9 @@ jobs:
         run: |
           mkdir dist
           docker run --rm --env NIRI_BRIDGE_CI=1 \
-            --mount type=bind,source="$PWD",target=/workspace,readonly \
+            --mount type=bind,source="$PWD",target=/input,readonly \
             --mount type=bind,source="$PWD/dist",target=/output \
-            niri-bridge-build:release bash scripts/ci.sh
+            niri-bridge-build:release bash /input/scripts/container-ci.sh
       - name: Retain verified assets
         id: assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
