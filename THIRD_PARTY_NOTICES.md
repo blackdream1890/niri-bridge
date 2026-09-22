@@ -20,13 +20,21 @@ The reviewed attribution is recorded in [licenses/binary-attributions.json](lice
 
 ## System components
 
-Python, GTK, PyGObject, Cairo, OpenSSL, systemd, udev and Niri are supplied by the
+Python, GTK, PyGObject, Cairo, OpenSSL, systemd, udev, libei, KDE Plasma/KWin and Niri are supplied by the
 operating system or installed separately. The NiriBridge archive does not bundle
 these system components or change their licenses. Consult their installed
 copyright files and upstream sources for their own terms.
 
 Niri and Weston used in isolated tests are build/test tools, not components of the
 NiriBridge release archive. Their source versions are pinned in the build image.
+
+The KDE pointer backend dynamically links to the system's libei 1.x library
+(MIT/Expat; Copyright 2020-2023 Red Hat). Its FFI declarations follow the public
+[libei API](https://libinput.pages.freedesktop.org/libei/api/). libei source and
+license are available from [upstream](https://gitlab.freedesktop.org/libinput/libei)
+and the distribution's corresponding source package. No libei implementation or
+KDE Connect code is copied or bundled. Desktop consent follows the
+[XDG RemoteDesktop portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html).
 
 ## Protocols and artwork
 

@@ -97,7 +97,6 @@
   "Keep between 1 and 16 screen connections.": "请保留 1 至 16 条屏幕连接。",
   "Keyboard": "键盘",
   "Keyboard, mouse & gestures": "键鼠与手势共享",
-  "Keyboard, mouse and native touchpad sharing for Niri.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later.": "面向 Niri 的键盘、鼠标与原生触摸板共享。\n本软件不提供任何担保。你可以按照 GNU GPL 第 3 版或后续版本使用、修改和再分发。",
   "LAN address or hostname": "局域网 IP 或主机名",
   "Left": "左侧",
   "Left edge": "左边缘",
@@ -131,8 +130,7 @@
   "One computer is locked. Unlock it before changing screen connections.": "有一台电脑已锁屏。请解锁后再修改屏幕连接。",
   "One computer waits for a connection. The other connects to its address.": "一台等待连接，另一台填写它的地址。",
   "Open NiriBridge": "打开 NiriBridge",
-  "Open NiriBridge when I log in": "登录后打开 NiriBridge",
-  "Open NiriBridge when I log in to Niri": "登录 Niri 后打开 NiriBridge",
+  "Open NiriBridge when I log in": "登录桌面后打开 NiriBridge",
   "Other computer": "对方电脑",
   "Other computer's address": "对方地址",
   "Other computer's entry edge": "对方跨屏入口",
@@ -250,7 +248,6 @@
   "Turn sharing on to move the pointer between computers.": "开启后，指针可从屏幕入口跨到另一台电脑。",
   "Unavailable device": "暂未连接的设备",
   "Unlock both computers to save screen connections.": "解锁两台电脑后才能保存屏幕连接设置。",
-  "Unlock this computer and return to your Niri session to continue.": "解锁并返回当前 Niri 会话后，即可继续。",
   "Unsaved edits will be discarded. Sharing will stop before NiriBridge quits.": "未保存的修改将被放弃。NiriBridge 会先停止共享，再退出。",
   "Update NiriBridge on both computers to add more screen connections.": "请升级两台电脑的 NiriBridge 后，再添加更多屏幕连接。",
   "Update both computers": "更新两台电脑的程序",
@@ -276,5 +273,9 @@
   "Your keyboard and touchpad gestures are following the pointer to the other computer.": "键盘与触摸板手势正随指针发往对方。",
   "Your screens will appear when connected": "连接后显示两台电脑的屏幕",
   "to": "到",
-  "{output} (unavailable)": "{output}（不可用）"
+  "{output} (unavailable)": "{output}（不可用）",
+  "Approve pointer control in the desktop authorization dialog to connect.": "请在桌面授权窗口中允许控制鼠标，以便连接。",
+  "Desktop input control is unavailable. Stop sharing, then start again and approve the desktop dialog.": "桌面输入控制不可用。请停止共享后重新启动，并在桌面授权窗口中确认。",
+  "Unlock this computer and return to your desktop session to continue.": "解锁本机并返回桌面会话后继续。",
+  "Keyboard, mouse and native touchpad sharing for Niri and KDE Plasma Wayland.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later.": "面向 Niri 和 KDE Plasma Wayland 的键盘、鼠标与原生触摸板共享。\n本软件不提供任何担保。你可以按照 GNU GPL 第 3 版或后续版本使用、修改和再分发。"
 }

@@ -341,7 +341,7 @@ class Window(Gtk.ApplicationWindow):
         behavior.pack_start(self.gesture_check, False, False, 0)
         behavior.pack_start(text(_("Three-finger switching and four-finger overview follow the pointer."), 'muted'), False, False, 0)
         row = box(False, 15)
-        row.pack_start(text(_("Open NiriBridge when I log in to Niri")), True, True, 0)
+        row.pack_start(text(_("Open NiriBridge when I log in")), True, True, 0)
         self.autostart = Gtk.Switch()
         self.autostart.set_valign(Gtk.Align.CENTER)
         self.autostart.connect('notify::active', self.autostart_changed)
@@ -644,7 +644,7 @@ class Window(Gtk.ApplicationWindow):
         elif status.get('configuring'):
             title, description, badge = _("Synchronizing screen connections"), _("Checking and saving entry edges on both computers."), _("Synchronizing")
         elif not status.get('local_unlocked', False):
-            title, description, badge = _("Sharing is paused for this session"), _("Unlock this computer and return to your Niri session to continue."), _("Session paused")
+            title, description, badge = _("Sharing is paused for this session"), _("Unlock this computer and return to your desktop session to continue."), _("Session paused")
         elif connected and status.get('peer_unlocked') is False:
             title, description, badge = _("The other computer is unavailable"), _("The other computer is locked or its session is inactive. Sharing can resume when it is available."), _("Other side paused")
         elif status.get('reason') == 'output_unavailable':
@@ -1025,7 +1025,7 @@ class Window(Gtk.ApplicationWindow):
         dialog = Gtk.AboutDialog(transient_for=self, modal=True)
         dialog.set_program_name('NiriBridge')
         dialog.set_version((self.info or {}).get('version', ''))
-        dialog.set_comments(_("Keyboard, mouse and native touchpad sharing for Niri.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later."))
+        dialog.set_comments(_("Keyboard, mouse and native touchpad sharing for Niri and KDE Plasma Wayland.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later."))
         dialog.set_copyright('Copyright © 2026 blackdream1890 and NiriBridge contributors')
         dialog.set_authors(['blackdream1890 and NiriBridge contributors'])
         dialog.set_website('https://github.com/blackdream1890/niri-bridge')
@@ -1151,6 +1151,9 @@ class Application(Gtk.Application):
 
     def activate_window(self, *_unused):
         if self.window is None:
+            # The application palette is dark. Keep theme-owned title controls
+            # in its matching variant without changing desktop-wide settings.
+            Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme', True)
             provider = Gtk.CssProvider()
             provider.load_from_path(str(HERE / 'style.css'))
             Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)

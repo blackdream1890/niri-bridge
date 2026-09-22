@@ -8,6 +8,9 @@ use crate::{
 };
 
 pub trait InputSink {
+    fn poll(&mut self) -> Result<()> {
+        Ok(())
+    }
     fn emit(&mut self, event: &InputEvent) -> Result<()>;
     fn select_output(&mut self, _output: &str) -> Result<()> {
         anyhow::bail!("This input backend cannot select a pointer output")
@@ -34,6 +37,9 @@ pub struct Receiver<S: InputSink> {
 }
 
 impl<S: InputSink> Receiver<S> {
+    pub fn poll(&mut self) -> Result<()> {
+        self.sink.poll()
+    }
     pub fn configure_touchpads(&mut self, devices: &[crate::touchpad::Descriptor]) -> Result<()> {
         ensure!(
             self.session.is_none() && devices.len() <= 4,

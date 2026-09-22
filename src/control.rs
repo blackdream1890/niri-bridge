@@ -2,7 +2,7 @@
 //! Same-user Unix control API. It exposes state and bounded management actions, never input data.
 use crate::{
     bridge::{Config, EdgeConfig, validate_edges},
-    manager, niri,
+    desktop, manager,
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -28,11 +28,11 @@ use tokio::{
 pub struct Desktop {
     pub edges: Vec<EdgeConfig>,
     pub revision: String,
-    pub outputs: BTreeMap<String, niri::LogicalOutput>,
+    pub outputs: BTreeMap<String, desktop::LogicalOutput>,
 }
 impl Desktop {
     pub fn read(config: &Config) -> Result<Self> {
-        let outputs = niri::outputs()?
+        let outputs = desktop::outputs()?
             .into_iter()
             .filter_map(|(name, o)| o.logical.map(|logical| (name, logical)))
             .collect();
@@ -174,9 +174,9 @@ pub struct Control {
     pub state: Arc<Mutex<Snapshot>>,
     commands: tokio::sync::Mutex<mpsc::Receiver<Command>>,
     outputs: tokio::sync::Mutex<
-        tokio::sync::watch::Receiver<Option<BTreeMap<String, niri::LogicalOutput>>>,
+        tokio::sync::watch::Receiver<Option<BTreeMap<String, desktop::LogicalOutput>>>,
     >,
-    output_sender: tokio::sync::watch::Sender<Option<BTreeMap<String, niri::LogicalOutput>>>,
+    output_sender: tokio::sync::watch::Sender<Option<BTreeMap<String, desktop::LogicalOutput>>>,
 }
 impl Control {
     pub fn update(&self, f: impl FnOnce(&mut Snapshot)) {
@@ -187,7 +187,7 @@ impl Control {
     pub async fn next(&self) -> Option<Command> {
         self.commands.lock().await.recv().await
     }
-    pub async fn next_outputs(&self) -> Option<BTreeMap<String, niri::LogicalOutput>> {
+    pub async fn next_outputs(&self) -> Option<BTreeMap<String, desktop::LogicalOutput>> {
         let mut receiver = self.outputs.lock().await;
         receiver.changed().await.ok()?;
         receiver.borrow().clone()
@@ -211,7 +211,7 @@ impl Server {
         let sender = control.output_sender.clone();
         server.output_task = Some(tokio::spawn(async move {
             loop {
-                if let Ok(Ok(outputs)) = tokio::task::spawn_blocking(niri::outputs).await {
+                if let Ok(Ok(outputs)) = tokio::task::spawn_blocking(desktop::outputs).await {
                     let outputs = outputs
                         .into_iter()
                         .filter_map(|(name, out)| out.logical.map(|value| (name, value)))

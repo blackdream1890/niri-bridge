@@ -60,6 +60,8 @@ enum Command {
     ProbeCapture(capture_probe::Options),
     #[command(hide = true)]
     ProbeWayland,
+    /// Read active output metadata without opening input devices.
+    Outputs,
     /// Inspect interfaces and permissions without capturing or injecting input.
     Doctor {
         /// Print a structured report suitable for sharing (no device serials or hostnames).
@@ -126,6 +128,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::ProbeCapture(options) => println!(
             "{}",
             serde_json::to_string(&capture_probe::worker(options)?)?
+        ),
+        Command::Outputs => println!(
+            "{}",
+            serde_json::to_string(&niri_bridge::desktop::outputs()?)?
         ),
         Command::ProbeWayland => doctor::print_wayland_probe()?,
         Command::Doctor { json } => {

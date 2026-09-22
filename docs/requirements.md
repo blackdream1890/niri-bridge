@@ -63,3 +63,21 @@ Version 0.2 also has widget, translation and paired configuration tests. Real tr
 - [x] Isolated kernel/libinput checks cover ordinary handoff and legacy ghost-contact recovery.
 - [x] Installation tests cover backups, startup migration, old interfaces and customized files.
 - [x] Two physical desktops: upgrade, repeated start/stop, tray quit, idle reopening and retained settings. The user confirmed local touchpad movement and three/four-finger gestures after stopping.
+
+## 0.3 KDE Wayland extension
+
+The 0.3 beta adds a KDE Plasma 6.6 Wayland endpoint alongside Niri. Detect the
+active compositor automatically; no user-maintained desktop selection is used.
+The original pair topology, keyboard-follow-pointer behavior, physical takeover,
+lock protection and emergency chord remain unchanged. Gestures are interpreted
+by the destination desktop using its native bindings, not mapped to a different
+desktop's actions. KDE X11 and other compositors remain outside this scope.
+
+KDE output metadata uses xdg-output logical coordinates. Pointer injection uses
+a pointer-only RemoteDesktop Portal session and libei; no video or clipboard
+access is requested. Consent is requested before connecting the peer so human
+response time does not interrupt heartbeat handling. Denial and revocation keep
+sharing stopped until an explicit Stop/Start. The UI explains the authorization
+step. Keyboard and native touchpad injection reuse uinput. KWin device readiness
+uses its read-only input inventory with a checked D-Bus owner; it does not weaken
+KWin process protections. Physical acceptance limits are listed in testing.md.

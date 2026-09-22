@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 
 ERRORS = {
+    'desktop_authorization_pending': N_("Approve pointer control in the desktop authorization dialog to connect."),
+    'desktop_authorization_required': N_("Desktop input control is unavailable. Stop sharing, then start again and approve the desktop dialog."),
     'peer_offline': N_("The other computer is offline. Turn on sharing on both computers first."),
     'session_locked': N_("One computer is locked. Unlock it before changing screen connections."),
     'settings_conflict': N_("Settings changed elsewhere. Reload before saving."),
@@ -152,7 +154,7 @@ class Model:
         config = self.manage('show', '--config', self.config) if self.config.exists() else None
         devices = json.loads(self.command(['/usr/bin/python3', self.helper, 'devices', '--config', str(self.config)]))
         try:
-            outputs = json.loads(self.command(['niri', 'msg', '--json', 'outputs']))
+            outputs = json.loads(self.command([self.binary, 'outputs']))
             outputs = {name: item['logical'] for name, item in outputs.items() if item.get('logical')}
         except (OperationError, ValueError, KeyError):
             outputs = {}

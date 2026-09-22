@@ -135,3 +135,25 @@ switching, four-finger overview, crossings through both physical connections and
 normal local touchpad operation after Stop sharing. This is acceptance on the
 initial hardware, separate from VM and simulated-widget evidence. Long suspend,
 more device models, extended buttons and combined gestures remain broader tests.
+
+## KDE Plasma 0.3 beta
+
+```sh
+cargo test --locked --test kde_capture -- --ignored --nocapture
+```
+
+Requires KWin Wayland and dbus-run-session. The test creates its own virtual
+framebuffer, private runtime/config/cache directories and session bus. It never
+opens host input devices or uses the user's desktop socket. Direct KWin EIS is
+used only by the isolated test fixture; the application always uses Portal
+consent. It verifies auto-detection, output geometry, absolute/relative pointer
+injection, capture lock/focus/shortcut inhibition, buttons, timed release and
+input revocation. These assertions passed on KWin 6.6.6. Existing Niri capture
+and encrypted coordinator regressions also passed.
+
+The actual KDE multi-monitor logical geometry and logind session discovery were
+checked read-only. The user confirmed physical KDE/Niri bidirectional keyboard and pointer control
+and normal return on the two machines. Breeze title-button sizing is corrected and visually checked on an isolated
+desktop with the actual GTK theme and window-button layout.
+Native KDE touchpad gestures, lock/reconnect, emergency return and long suspend
+still require separate acceptance. Do not extend the basic result to those cases.

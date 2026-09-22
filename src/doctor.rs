@@ -34,6 +34,7 @@ const EMULATION_PROTOCOLS: &[&str] = &[
 pub struct Report {
     pub schema_version: u32,
     pub niri_version: Option<String>,
+    pub desktop: Option<String>,
     pub outputs: Vec<niri::Output>,
     pub niri_query_ok: bool,
     pub wayland: Option<WaylandCapabilities>,
@@ -71,8 +72,8 @@ impl Report {
         let mut lines = vec![
             "NiriBridge read-only capability report".to_string(),
             format!(
-                "Niri: {}",
-                self.niri_version.as_deref().unwrap_or("unavailable")
+                "Desktop: {}",
+                self.desktop.as_deref().unwrap_or("unavailable")
             ),
             format!(
                 "Active outputs: {}",
@@ -129,14 +130,21 @@ fn present(value: bool) -> &'static str {
 
 pub fn inspect() -> Report {
     let mut notes = Vec::new();
-    let outputs = niri::outputs();
-    let niri_query_ok = outputs.is_ok();
-    if !niri_query_ok {
-        notes.push("Niri outputs could not be queried; run from the graphical session.".into());
+    let desktop = crate::desktop::detect().ok();
+    let outputs = crate::desktop::outputs();
+    let niri_query_ok = desktop == Some(crate::desktop::Kind::Niri) && outputs.is_ok();
+    if outputs.is_err() {
+        notes.push(
+            "Desktop outputs could not be queried; run from a supported Wayland session.".into(),
+        );
     }
-    let niri_version = niri::query("Version")
-        .ok()
-        .and_then(|v| v.get("Version")?.as_str().map(str::to_string));
+    let niri_version = if desktop == Some(crate::desktop::Kind::Niri) {
+        niri::query("Version")
+            .ok()
+            .and_then(|v| v.get("Version")?.as_str().map(str::to_string))
+    } else {
+        None
+    };
     // Isolate the blocking registry roundtrip so a stalled compositor cannot hang doctor.
     let wayland = env::current_exe().ok().and_then(|exe| {
         bounded_output(
@@ -151,7 +159,10 @@ pub fn inspect() -> Report {
             .push("Wayland registry inspection failed or timed out; no input was captured.".into());
     }
     let portal = inspect_portal();
-    if portal.input_capture_advertised && portal.mutter_input_capture_running == Some(false) {
+    if desktop != Some(crate::desktop::Kind::Kde)
+        && portal.input_capture_advertised
+        && portal.mutter_input_capture_running == Some(false)
+    {
         notes.push("InputCapture is advertised, but the Mutter InputCapture service is not running. Advertisement does not prove a usable backend.".into());
     }
     let uinput = access("/dev/uinput");
@@ -161,6 +172,7 @@ pub fn inspect() -> Report {
     Report {
         schema_version: 1,
         niri_version,
+        desktop: desktop.map(|d| format!("{d:?}")),
         outputs: outputs.unwrap_or_default().into_values().collect(),
         niri_query_ok,
         wayland,

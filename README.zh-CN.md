@@ -2,17 +2,19 @@
 
 [English](README.md) · 简体中文
 
-让键盘与触摸板手势跟随指针，在两台 Niri 桌面之间切换。
+让键盘与触摸板手势跟随指针，在 Niri 和 KDE Plasma 桌面之间切换。
 
-NiriBridge 在两台 Ubuntu/Niri/Wayland 电脑之间共享键盘、鼠标和触摸板，各自继续渲染本地桌面。指针穿过设置好的屏幕边缘后，键盘自动跟随；三指工作区切换和四指总览手势也在当前目标电脑执行。
+NiriBridge 在两台运行 Niri 或 KDE Plasma 的 Ubuntu Wayland 电脑之间共享键盘、鼠标和触摸板，各自继续渲染本地桌面。指针穿过设置好的屏幕边缘后，键盘自动跟随；三指工作区切换和四指总览手势也在当前目标电脑执行。
+
+**0.3 新增 Niri / KDE Plasma Wayland 自动检测及 KDE 鼠标注入后端。** KDE 端启动共享时需确认桌面输入控制授权；键盘和原生触摸板继续使用 uinput。手势由目标桌面按自身配置解释，不强行映射为 Niri 动作。不支持 KDE X11。实机验收范围见测试文档。
 
 **0.2 版新增原生桌面界面**，提供连接状态、开始与停止共享、配对、屏幕连接和输入设备设置。英文是源语言和回退语言，简体中文翻译完整。界面默认跟随系统语言，也可在设置中手动切换，保留未保存的编辑，不重启输入共享。
 
-当前为面向 Ubuntu 26.04 和 Niri 26.04 的早期测试版，采用 **GPL-3.0-or-later**。完整条款见 [LICENSE](LICENSE)，依赖声明见[第三方许可清单](THIRD_PARTY_NOTICES.md)。
+当前为面向 Ubuntu 26.04、Niri 26.04 和 KDE Plasma 6.6 Wayland 的早期测试版，采用 **GPL-3.0-or-later**。完整条款见 [LICENSE](LICENSE)，依赖声明见[第三方许可清单](THIRD_PARTY_NOTICES.md)。
 
 ## 桌面界面
 
-从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
+从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
 
 仍提供 x86_64 压缩包。安装[运行依赖](docs/setup.zh-CN.md)并解压后，以桌面用户执行：
 

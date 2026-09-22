@@ -2,7 +2,7 @@
 //! Configuration operations shared by the desktop UI and paired layout updates.
 use crate::{
     bridge::{Config, Connection, EdgeConfig, validate_edges},
-    identity, niri, transport,
+    desktop, identity, transport,
 };
 use anyhow::{Context, Result, ensure};
 use clap::Subcommand;
@@ -196,7 +196,7 @@ impl Prepared {
     }
     pub fn commit(&mut self) -> Result<()> {
         if !self.target_outputs.is_empty() {
-            let outputs = niri::outputs()?;
+            let outputs = desktop::outputs()?;
             ensure!(
                 self.target_outputs
                     .iter()
@@ -243,7 +243,7 @@ impl Drop for Prepared {
 }
 pub fn prepare_edges(path: &Path, expected: &str, edges: &[EdgeConfig]) -> Result<Prepared> {
     validate_edges(edges)?;
-    let outputs = niri::outputs()?;
+    let outputs = desktop::outputs()?;
     for edge in edges {
         let output = outputs
             .get(&edge.output)

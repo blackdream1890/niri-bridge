@@ -188,14 +188,42 @@ impl ScrollSource {
 }
 
 pub struct Hybrid {
-    pointer: Pointer,
+    pointer: Backend,
     keyboard: crate::uinput::Keyboard,
     touchpads: Vec<crate::touchpad::VirtualTouchpad>,
 }
 
+pub type SharedEi = std::rc::Rc<std::cell::RefCell<crate::ei::Pointer>>;
+enum Backend {
+    Wayland(Pointer),
+    Ei(SharedEi),
+}
+impl InputSink for Backend {
+    fn emit(&mut self, event: &InputEvent) -> Result<()> {
+        match self {
+            Self::Wayland(p) => p.emit(event),
+            Self::Ei(p) => p.borrow_mut().emit(event),
+        }
+    }
+    fn select_output(&mut self, output: &str) -> Result<()> {
+        match self {
+            Self::Wayland(p) => p.select_output(output),
+            Self::Ei(p) => p.borrow_mut().select_output(output),
+        }
+    }
+}
 impl Hybrid {
     pub fn connect(socket: &Path, output_name: &str) -> Result<Self> {
-        let pointer = Pointer::connect(socket, output_name)?;
+        Self::connect_with_ei(socket, output_name, None)
+    }
+    pub fn connect_with_ei(socket: &Path, output_name: &str, ei: Option<SharedEi>) -> Result<Self> {
+        let pointer = match ei {
+            Some(p) => {
+                p.borrow_mut().select_output(output_name)?;
+                Backend::Ei(p)
+            }
+            None => Backend::Wayland(Pointer::connect(socket, output_name)?),
+        };
         let keyboard = crate::uinput::Keyboard::create()?;
         Ok(Self {
             pointer,
@@ -205,6 +233,12 @@ impl Hybrid {
     }
 }
 impl InputSink for Hybrid {
+    fn poll(&mut self) -> Result<()> {
+        if let Backend::Ei(p) = &self.pointer {
+            p.borrow_mut().poll()?;
+        }
+        Ok(())
+    }
     fn select_output(&mut self, output: &str) -> Result<()> {
         self.pointer.select_output(output)
     }

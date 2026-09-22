@@ -524,7 +524,7 @@ impl VirtualTouchpad {
             ))?;
         }
         let mut device = builder.build()?;
-        crate::uinput::wait_for_niri(&mut device)?;
+        crate::uinput::wait_for_compositor(&mut device)?;
         Ok(Self {
             device,
             descriptor: descriptor.clone(),

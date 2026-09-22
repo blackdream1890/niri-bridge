@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0-beta.1
+
+- Automatically detect Niri and KDE Plasma Wayland from the active compositor socket.
+- Discover KDE logical output geometry, including fractional scaling and rotated displays.
+- Add a pointer-only RemoteDesktop Portal / libei backend with explicit desktop consent, revocation handling and no screen or clipboard capture.
+- Share the existing capture, paired TLS, recovery, keyboard and native touchpad paths across both desktops.
+- Identify graphical sessions from logind when launched by the user service; check KWin virtual-device readiness without accessing its protected process file descriptors.
+- Keep KDE Breeze title-bar controls at their native proportions with visible icons, remove the inherited light top border, and use explicit tray pixels on fresh installations.
+- Add an isolated two-output KWin capture/injection and authorization-revocation regression, including a stale Niri environment. KDE X11 remains unsupported.
+
+
 ## 0.2.0-beta.3 — 2026-09-09
 
 - Opening the interface leaves sharing stopped until the user starts it. Stopping sharing releases input; quitting from the tray waits for sharing to stop before closing the application.

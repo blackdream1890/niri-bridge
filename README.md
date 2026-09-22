@@ -2,17 +2,19 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Keep your keyboard and touchpad gestures with your pointer across two Niri desktops.
+Keep your keyboard and touchpad gestures with your pointer across Niri and KDE Plasma desktops.
 
-NiriBridge shares keyboard, mouse and touchpad input between two Ubuntu/Niri/Wayland computers. Each computer renders its own desktop. Move the pointer through a configured screen edge and the keyboard follows automatically; three-finger workspace switching and four-finger overview gestures follow the same destination.
+NiriBridge shares keyboard, mouse and touchpad input between two Ubuntu Wayland computers running Niri or KDE Plasma. Each computer renders its own desktop. Move the pointer through a configured screen edge and the keyboard follows automatically; three-finger workspace switching and four-finger overview gestures follow the same destination.
+
+**Version 0.3 adds automatic Niri/KDE Plasma detection and a user-authorized libei pointer backend for KDE.** Keyboard and native touchpad input retain the uinput path. KDE gestures follow KDE’s own bindings; they are not remapped to Niri actions. KDE X11 is not supported.
 
 **Version 0.2 adds a native desktop interface** with live connection status, Start/Stop sharing controls, pairing, screen arrangement and input preferences. English is the default interface language, with a complete Simplified Chinese catalog. The language follows your desktop by default and can be changed in Preferences without restarting input sharing or losing unsaved edits.
 
-This is an early beta for Ubuntu 26.04 and Niri 26.04. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
+This is an early beta for Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
 
 ## Desktop interface
 
-Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
+Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
 
 The portable x86_64 archive remains available. After installing the [runtime dependencies](docs/setup.md), extract it and run as your desktop user:
 
@@ -47,7 +49,7 @@ The UI manages the standard `niri-bridge.service` user service. The login prefer
 4. Allow access to the selected input devices if needed, then start sharing on both computers.
 5. In **Screen connections**, drag the other computer into position, choose the entry displays and save. Both sides validate their current configuration before applying the change.
 
-Screen connections configure the crossing between computers. The monitor arrangement within each computer continues to follow its Niri configuration.
+Screen connections configure the crossing between computers. The monitor arrangement within each computer continues to follow its desktop configuration.
 
 The complete [installation and operating guide](docs/setup.md) covers dependencies, device access, firewall rules and recovery.
 
@@ -73,7 +75,7 @@ systemctl --user stop niri-bridge.service
 
 ## Implementation and validation
 
-The Rust backend uses paired-certificate TLS 1.3. Selected physical keyboard events are captured before source-side input-method filtering; uinput injection on the destination supports its Niri bindings and input method. Native touchpad frames retain their timing and are routed through a local or remote virtual touchpad, allowing Niri to interpret gestures on the destination. Mouse input uses Wayland capture and virtual pointer protocols.
+The Rust backend uses paired-certificate TLS 1.3. Selected physical keyboard events are captured before source-side input-method filtering; uinput injection on the destination supports its desktop bindings and input method. Native touchpad frames retain their timing and are routed through a local or remote virtual touchpad, allowing the destination compositor to interpret gestures. Mouse capture uses Wayland protocols; injection uses wlr-virtual-pointer on Niri or an authorized Portal/libei session on KDE.
 
 The GTK desktop UI communicates with the backend over a private, same-user Unix socket. It does not open a web server. Settings retain existing TOML comments, reject stale edits and are written atomically. Pairing changes require an explicit fingerprint check in the interface.
 
@@ -89,4 +91,4 @@ Bidirectional input, native three/four-finger gestures and corrected touchpad re
 - [Security](SECURITY.md)
 - [Requirements and acceptance checklist](docs/requirements.md)
 
-The first supported development target is Ubuntu 26.04 with Niri 26.04. Other compositors and operating systems have not been validated. The repository pins Rust 1.98.1 with `rust-toolchain.toml`.
+The first supported development target is Ubuntu 26.04 with Niri 26.04. KDE Plasma 6.6 Wayland is the additional 0.3 beta target; see the test record for its current acceptance limits. Other compositors and operating systems have not been validated. The repository pins Rust 1.98.1 with `rust-toolchain.toml`.

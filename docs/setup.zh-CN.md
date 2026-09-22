@@ -2,11 +2,11 @@
 
 [English](setup.md) · 简体中文
 
-当前开发验证平台为 Ubuntu 26.04 和 Niri 26.04，两台电脑须安装相同版本的 NiriBridge。
+当前开发验证平台为 Ubuntu 26.04，支持 Niri 26.04 或 KDE Plasma 6.6 Wayland，两台电脑须安装相同版本的 NiriBridge。
 
 ## 构建与安装
 
-需要先单独安装 Niri 26.04，参见[官方项目](https://github.com/niri-wm/niri)。NiriBridge 不安装或重配合成器。
+需要先安装所用桌面；Niri 参见[官方项目](https://github.com/niri-wm/niri)。NiriBridge 不安装或重配合成器。
 
 桌面界面使用系统 Python、GTK 3、PyGObject 和 Cairo；托盘通过 GIO 实现 StatusNotifierItem，无须额外的 AppIndicator 绑定。
 
@@ -15,7 +15,7 @@ Ubuntu 运行依赖为 `python3-gi`、`python3-gi-cairo` 和 `gir1.2-gtk-3.0`。
 Ubuntu 推荐下载并校验 `.deb` 发行包，使用系统软件包安装器打开，或执行：
 
 ```sh
-sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb
 ```
 
 随后从应用启动器打开 NiriBridge，以桌面用户身份完成设置。软件包会安装依赖，将发行文件放在 `/usr/lib/niri-bridge`，并在用户下次打开应用时安全更新其个人安装。软件包维护本身不重启正在共享的会话。旧压缩包安装生成且未经修改的应用入口会转到这个更新入口；自定义启动器会保留。如果修改过启动器，请打开 `/usr/bin/niri-bridge-ui` 应用软件包更新。
@@ -23,7 +23,7 @@ sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb
 压缩包或源码安装需要先安装运行依赖：
 
 ```sh
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec libei1
 ```
 
 预编译发行包经 `SHA256SUMS` 校验并完整解压后，以桌面用户运行安装程序，不加 sudo：
@@ -177,3 +177,7 @@ niri-bridge-uninstall --revoke-input-access
 ```
 
 程序会先运行权限卸载工具，再删除程序文件。管理员认证失败或取消时会保留程序文件，共享服务可能已经停止。若卸载时保留了设备授权，原始发行包中的 `scripts/device-access.py` 仍可用于后续恢复。除非打算重新配对，否则保留身份文件。
+
+## KDE Plasma Wayland
+
+0.3 自动从当前 Wayland socket 识别 Niri 或 KWin，无需手动选择桌面。KDE 端点击启动共享后，在桌面授权窗口允许鼠标控制；不申请屏幕画面或剪贴板访问。取消或撤销授权后停止输入，停止共享再启动即可重新申请。键盘与原生触摸板仍需选定设备及 uinput 权限。手势使用目标桌面的原生行为，不支持 KDE X11。

@@ -115,7 +115,9 @@ jobs:
             exit 1
           fi
           cat > release-notes.md <<'NOTES'
-          Early beta for Ubuntu 26.04, Niri 26.04 and Linux x86_64.
+          Early beta for Ubuntu 26.04, Niri 26.04 or KDE Plasma 6.6 Wayland, and Linux x86_64.
+
+          The desktop backend is detected automatically. KDE requests pointer-control consent when sharing starts; no screen video or clipboard access is requested. KDE X11 is unsupported.
 
           Download the Ubuntu amd64 `.deb` package and verify it with SHA256SUMS. Open it with your system package installer, then open NiriBridge from the application launcher. The portable archive remains available with `python3 scripts/install.py`. Install the same version on both computers.
 

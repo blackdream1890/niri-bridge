@@ -4,9 +4,10 @@ use crate::{
     activity::{ActivityMonitor, ActivitySource},
     capture_probe::{self, Event, StreamContext, StreamEvent},
     control::{self, LayoutMessage, Reply},
+    desktop,
     geometry::{Boundary, Rect},
     input::StopReason,
-    manager, niri,
+    manager,
     pointer::Hybrid,
     protocol::{self, EdgePosition, InputEvent, Message},
     receiver::{InputSink, Receiver},
@@ -194,8 +195,7 @@ fn connection_error_code(error: &anyhow::Error) -> &'static str {
 async fn run_async(mut config: Config) -> Result<()> {
     let (_control_server, control) =
         control::Server::start(control::Snapshot::new(config.peer_name.clone()))?;
-    let session_id =
-        std::env::var("XDG_SESSION_ID").context("Run inside the Niri graphical session")?;
+    let session_id = crate::session::current_id().await?;
     let mut monitor = Monitor::start(session_id);
     let local = Identity::load(&config.certificate, &config.private_key)?;
     let peer = transport::load_certificate(&config.peer_certificate)?;
@@ -207,10 +207,70 @@ async fn run_async(mut config: Config) -> Result<()> {
     } else {
         None
     };
-    let mut last_error = String::new();
     let exit_signal = shutdown();
     tokio::pin!(exit_signal);
+    control.update(|s| {
+        s.config_path = config
+            .source_path
+            .as_ref()
+            .and_then(|p| p.canonicalize().ok());
+        s.local = control::Desktop::read(&config).ok();
+    });
+    // Human consent is outside the peer heartbeat and capture loops.
+    let (_portal, ei) = if desktop::detect()? == desktop::Kind::Kde {
+        while !unlocked(&monitor.status) {
+            tokio::select! {_=&mut exit_signal=>return Ok(()),r=monitor.status.changed()=>{r?;}}
+        }
+        control.update(|s| {
+            s.connection = "paused".into();
+            s.reason = Some("desktop_authorization_pending".into());
+            s.local_unlocked = true;
+        });
+        let prepare = async {
+            let (portal, fd) = crate::portal::Session::create().await?;
+            let outputs = desktop::outputs()?;
+            let name = if outputs.contains_key(&config.edges[0].output) {
+                config.edges[0].output.clone()
+            } else {
+                outputs
+                    .into_keys()
+                    .next()
+                    .context("No active output available")?
+            };
+            let pointer = crate::ei::Pointer::connect(fd, &name)?;
+            Ok::<_, anyhow::Error>((portal, pointer))
+        };
+        match tokio::select! {_=&mut exit_signal=>return Ok(()),r=prepare=>r} {
+            Ok((portal, pointer)) => (
+                Some(portal),
+                Some(std::rc::Rc::new(std::cell::RefCell::new(pointer))),
+            ),
+            Err(_) => {
+                control.update(|s| {
+                    s.connection = "problem".into();
+                    s.reason = Some("desktop_authorization_required".into());
+                });
+                eprintln!(
+                    "Desktop input authorization is unavailable. Stop sharing, then start again to retry."
+                );
+                (&mut exit_signal).await;
+                return Ok(());
+            }
+        }
+    } else {
+        (None, None)
+    };
+    let mut last_error = String::new();
     loop {
+        if ei.as_ref().is_some_and(|p| p.borrow_mut().poll().is_err()) {
+            control.update(|s| {
+                s.connection = "problem".into();
+                s.reason = Some("desktop_authorization_required".into());
+                s.capture_ready = false;
+            });
+            (&mut exit_signal).await;
+            return Ok(());
+        }
         if let Some(path) = &config.source_path {
             config = Config::load(path)?;
         }
@@ -272,6 +332,7 @@ async fn run_async(mut config: Config) -> Result<()> {
                         &mut activity,
                         monitor.status.clone(),
                         &control,
+                        ei.clone(),
                     )
                     .await
                 };
@@ -460,7 +521,7 @@ async fn send(writer: &mut (impl AsyncWrite + Unpin), message: &Message) -> Resu
 }
 
 fn placement(edge: &EdgeConfig, fraction: f64) -> Result<InputEvent> {
-    let output = niri::outputs()?
+    let output = desktop::outputs()?
         .remove(&edge.output)
         .context("Boundary output disappeared")?;
     let logical = output.logical.context("Boundary output is disabled")?;
@@ -500,27 +561,15 @@ fn active_edges(local: &control::Desktop, peer: Option<&control::Desktop>) -> Ve
         .collect()
 }
 
-fn wayland_socket() -> Result<PathBuf> {
-    let display = std::env::var_os("WAYLAND_DISPLAY").context("WAYLAND_DISPLAY is not set")?;
-    let path = PathBuf::from(display);
-    if path.is_absolute() {
-        Ok(path)
-    } else {
-        Ok(PathBuf::from(
-            std::env::var_os("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR is not set")?,
-        )
-        .join(path))
-    }
-}
-
 async fn run_session<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     stream: S,
     config: &Config,
     activity: &mut ActivityMonitor,
     status: watch::Receiver<Status>,
     control: &control::Control,
+    ei: Option<crate::pointer::SharedEi>,
 ) -> Result<bool> {
-    let outputs = niri::outputs()?;
+    let outputs = desktop::outputs()?;
     let output = if outputs
         .get(&config.edges[0].output)
         .is_some_and(|o| o.logical.is_some())
@@ -532,7 +581,7 @@ async fn run_session<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
             .find_map(|(name, o)| o.logical.map(|_| name))
             .context("No active output is available")?
     };
-    let sink = Hybrid::connect(&wayland_socket()?, &output)?;
+    let sink = Hybrid::connect_with_ei(&desktop::socket_path()?, &output, ei)?;
     coordinate_with_control(stream, config, activity, status, sink, Some(control)).await
 }
 
@@ -757,6 +806,7 @@ pub async fn coordinate_with_control<
                     }
                 }=>{
                     ready?;
+                    receiver.poll()?;
                     if pending_layout.as_ref().is_some_and(|p|Instant::now()>=p.deadline) {
                         let mut pending=pending_layout.take().unwrap();
                         send(&mut writer,&Message::Layout{message:LayoutMessage::Abort{id:pending.id.clone()}}).await?;
@@ -1035,7 +1085,7 @@ mod tests {
 
     #[test]
     fn connections_match_by_id_and_an_unavailable_display_only_disables_its_own_route() {
-        let output: niri::LogicalOutput = serde_json::from_value(serde_json::json!({
+        let output: desktop::LogicalOutput = serde_json::from_value(serde_json::json!({
             "x":0,"y":0,"width":1920,"height":1200,"scale":1.6,"transform":"Normal"
         }))
         .unwrap();

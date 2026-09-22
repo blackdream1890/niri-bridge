@@ -3,6 +3,7 @@ pub mod activity;
 pub mod bridge;
 pub mod capture_probe;
 pub mod control;
+pub mod desktop;
 pub mod doctor;
 pub mod geometry;
 pub mod identity;
@@ -18,3 +19,6 @@ pub mod touchpad;
 pub mod transport;
 pub mod uinput;
 pub mod verify_input;
+
+pub mod ei;
+pub mod portal;

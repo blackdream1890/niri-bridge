@@ -41,9 +41,8 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 };
 
 use crate::{
-    doctor,
+    desktop, doctor,
     geometry::{Boundary, Edge},
-    niri,
     protocol::{Axis, InputEvent, ScrollSource},
 };
 
@@ -377,7 +376,7 @@ fn worker_internal(options: Vec<Options>, stream: Option<StreamContext>) -> Resu
         "Capture probes use one edge"
     );
     let seconds = options[0].seconds;
-    let outputs = niri::outputs()?;
+    let outputs = desktop::outputs()?;
     let connection = Connection::connect_to_env()?;
     let (globals, mut queue) = registry_queue_init::<State>(&connection)?;
     let qh = queue.handle();

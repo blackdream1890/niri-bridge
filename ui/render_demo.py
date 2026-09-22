@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from unittest import mock
 
-from app import Application, GLib
+from app import Application, GLib, Gtk
 from test_ui import FakeModel
 from canvas import LayoutDraft
 
@@ -15,7 +15,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--language', choices=('en', 'zh_CN'), default='en')
+    parser.add_argument('--gtk-theme', help='Optional theme for isolated visual regression checks')
+    parser.add_argument('--decoration-layout', help='Optional GTK title-button layout for isolated checks')
     args = parser.parse_args()
+    settings = Gtk.Settings.get_default()
+    if args.gtk_theme:
+        settings.set_property('gtk-theme-name', args.gtk_theme)
+    if args.decoration_layout:
+        settings.set_property('gtk-decoration-layout', args.decoration_layout)
     args.output.mkdir(parents=True, exist_ok=True)
     for name in ('overview', 'layout', 'pair', 'preferences'):
         (args.output / (name + '.png')).unlink(missing_ok=True)

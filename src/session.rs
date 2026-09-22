@@ -48,7 +48,7 @@ pub fn check_current() -> Result<Status> {
 }
 
 pub async fn current_status() -> Result<Status> {
-    let id = std::env::var("XDG_SESSION_ID").context("Run inside the Niri graphical session")?;
+    let id = current_id().await?;
     let mut monitor = Monitor::start(id);
     timeout(Duration::from_secs(5), async {
         loop {
@@ -61,6 +61,64 @@ pub async fn current_status() -> Result<Status> {
     })
     .await
     .context("Could not verify the graphical session safety state")?
+}
+
+/// Resolve the active compositor's logind session, including systemd user launches.
+/// SSH and user-manager environment variables are not evidence of a graphical session.
+pub async fn current_id() -> Result<String> {
+    let pid = crate::desktop::compositor_pid()? as u32;
+    timeout(Duration::from_secs(3), async {
+        let connection = zbus::Connection::system().await?;
+        let manager = Proxy::new(
+            &connection,
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1",
+            "org.freedesktop.login1.Manager",
+        )
+        .await?;
+        if let Ok(path) = manager
+            .call::<_, _, OwnedObjectPath>("GetSessionByPID", &(pid,))
+            .await
+        {
+            let session = Proxy::new(
+                &connection,
+                "org.freedesktop.login1",
+                path,
+                "org.freedesktop.login1.Session",
+            )
+            .await?;
+            read_status(&session).await?;
+            return Ok(session.get_property::<String>("Id").await?);
+        }
+        // Compositors started by systemd --user are outside the login scope.
+        // Select only an unambiguous same-user Wayland session, never the SSH session.
+        let sessions: Vec<(String, u32, String, String, OwnedObjectPath)> =
+            manager.call("ListSessions", &()).await?;
+        let mut candidates = Vec::new();
+        for (id, uid, _, _, path) in sessions {
+            if uid != unsafe { libc::geteuid() } {
+                continue;
+            }
+            let session = Proxy::new(
+                &connection,
+                "org.freedesktop.login1",
+                path,
+                "org.freedesktop.login1.Session",
+            )
+            .await?;
+            if session.get_property::<String>("Type").await? == "wayland" {
+                read_status(&session).await?;
+                candidates.push(id);
+            }
+        }
+        ensure!(
+            candidates.len() == 1,
+            "Cannot unambiguously identify this desktop's Wayland login session"
+        );
+        Ok(candidates.remove(0))
+    })
+    .await
+    .context("Cannot identify the graphical login session")?
 }
 
 async fn monitor_session(session_id: &str, sender: &watch::Sender<Status>) -> Result<()> {

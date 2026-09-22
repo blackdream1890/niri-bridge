@@ -48,3 +48,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends qemu-system-x86
     && apt-get download linux-image-7.0.0-31-generic=7.0.0-31.31 \
     && dpkg-deb --extract linux-image-*.deb /opt/kernel-test/unpacked \
     && rm -rf /opt/kernel-test/packages /var/lib/apt/lists/*
+
+# KDE tests use a private virtual framebuffer and private session bus only.
+RUN apt-get update && apt-get install -y --no-install-recommends libei1 kwin-wayland \
+    && rm -rf /var/lib/apt/lists/*
+# Ubuntu splits the EIS test backend into kwin-common. Virtual tests need no
+# realtime-scheduling file capability (and receive no additional container caps).
+RUN apt-get update && apt-get install -y --no-install-recommends kwin-common \
+    && setcap -r /usr/bin/kwin_wayland \
+    && rm -rf /var/lib/apt/lists/*

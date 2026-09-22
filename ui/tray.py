@@ -110,10 +110,12 @@ class Tray:
         if interface == MENU:
             value = {'Version': ('u', 3), 'TextDirection': ('s', 'ltr'), 'Status': ('s', 'normal'), 'IconThemePath': ('as', [str(self.icon.parent)])}.get(name)
             return GLib.Variant(*value) if value else None
+        # Use the protocol's ARGB pixmap directly. A nonempty theme name may
+        # win over valid pixels while a freshly installed icon is still uncached.
         value = {'Category': 'ApplicationStatus', 'Id': 'niri-bridge', 'Title': self.title, 'Status': 'Active', 'WindowId': 0,
-                 'IconThemePath': str(self.icon.parent), 'Menu': MENU_PATH, 'ItemIsMenu': False, 'IconName': 'niri-bridge',
+                 'IconThemePath': '', 'Menu': MENU_PATH, 'ItemIsMenu': False, 'IconName': '',
                  'IconPixmap': self.pixmaps, 'OverlayIconName': '', 'OverlayIconPixmap': [], 'AttentionIconName': '', 'AttentionIconPixmap': [],
-                 'AttentionMovieName': '', 'ToolTip': ('niri-bridge', self.pixmaps, 'NiriBridge', self.title)}.get(name)
+                 'AttentionMovieName': '', 'ToolTip': ('', self.pixmaps, 'NiriBridge', self.title)}.get(name)
         return GLib.Variant(SNI_PROPERTIES[name], value) if name in SNI_PROPERTIES else None
 
     def dispatch(self, item):

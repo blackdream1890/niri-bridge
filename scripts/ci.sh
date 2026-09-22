@@ -21,6 +21,7 @@ python3 -B -m unittest discover -s scripts -p 'test_*.py'
 python3 -B ui/test_i18n.py
 GDK_BACKEND=x11 xvfb-run -a -s '-screen 0 1280x1200x24' dbus-run-session -- python3 -W ignore::DeprecationWarning:gi.events -B ui/test_ui.py
 NIRI_BRIDGE_UI_TEST_LANGUAGE=zh_CN GDK_BACKEND=x11 xvfb-run -a -s '-screen 0 1280x1200x24' dbus-run-session -- python3 -W ignore::DeprecationWarning:gi.events -B ui/test_ui.py
+cargo test --locked --test kde_capture -- --ignored --nocapture
 cargo test --locked --test nested_capture -- --ignored --nocapture
 cargo test --locked --test encrypted_bridge -- --ignored --nocapture --test-threads=1
 cargo-audit audit --deny warnings

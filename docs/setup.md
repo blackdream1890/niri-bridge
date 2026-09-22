@@ -2,18 +2,18 @@
 
 English · [简体中文](setup.zh-CN.md)
 
-The current development target is Ubuntu 26.04 and Niri 26.04. Install the same NiriBridge version on both computers.
+The current development targets are Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland. The backend detects the compositor from the active Wayland socket; no desktop selector is required. KDE X11 is unsupported. Install the same NiriBridge version on both computers.
 
 ## Build and install
 
-Niri 26.04 must already be installed separately; see the [official Niri project](https://github.com/niri-wm/niri). NiriBridge does not install or reconfigure the compositor.
+A supported desktop must already be installed separately; for Niri see the [official Niri project](https://github.com/niri-wm/niri). NiriBridge does not install or reconfigure the compositor.
 
 The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tray integration uses GIO and the StatusNotifierItem protocol; no additional AppIndicator binding is required.
 
 For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
 
 ```sh
-sudo apt install ./niri-bridge-0.2.0-beta.3-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb
 ```
 
 Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.
@@ -21,7 +21,7 @@ Open NiriBridge from the application launcher to complete setup as your desktop 
 For a portable archive or source checkout, install the runtime dependencies with:
 
 ```sh
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec libei1
 ```
 
 Run the NiriBridge installer as your desktop user, without sudo. Administrator authentication is requested separately when granting input-device access. The backend build needs a C compiler and the Rust toolchain pinned by the repository. The `openssl` command is used to inspect and normalize public pairing files.
@@ -45,6 +45,16 @@ The installer places the backend and launcher in `~/.local/bin`, UI resources in
 Installation waits for the interface to close, stops sharing safely and leaves it stopped. An older interface without the new quit action must be saved and closed from its tray menu before retrying installation. The old `--no-restart` option is accepted for script compatibility, but installation no longer starts sharing automatically.
 
 Protocol or ALPN mismatches are rejected, so update both computers together.
+
+## KDE desktop authorization
+
+Start sharing from the current graphical login. On KDE, approve pointer control
+in the desktop's RemoteDesktop dialog. NiriBridge does not request screen video
+or clipboard access. Cancelling or revoking consent stops input; Stop then Start
+sharing to request a new session. Consent is not silently persisted or bypassed.
+Native keyboard and touchpad injection still require the selected-device/uinput
+permission setup below. KWin hotplug readiness is checked through its read-only
+input inventory. Gestures use the destination desktop's native behavior.
 
 ## Interface language
 

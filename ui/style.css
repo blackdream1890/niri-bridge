@@ -1,5 +1,5 @@
 .niri-bridge { background-color: #111925; color: #e8eef7; font-family: Sans; font-size: 14px; }
-.niri-bridge headerbar { background: #172130; border-bottom: 1px solid #26364a; box-shadow: none; color: #ecf3fc; }
+.niri-bridge headerbar { background: #172130; border-top: 0; border-bottom: 1px solid #26364a; box-shadow: none; color: #ecf3fc; }
 .niri-bridge headerbar .title { font-weight: 700; }
 .niri-bridge .sidebar { background: #141e2c; border-right: 1px solid #253448; padding: 18px 12px; }
 .niri-bridge .brand { font-size: 22px; font-weight: 700; color: #edf5ff; }
@@ -18,19 +18,19 @@
 .niri-bridge .badge { background: #204b43; color: #a8ead3; border-radius: 20px; padding: 5px 12px; font-size: 12px; }
 .niri-bridge .badge.waiting { background: #453c2a; color: #f1d596; }
 .niri-bridge .badge.paused { background: #2b394d; color: #bbc9dc; }
-.niri-bridge button { background: #25364c; border: 1px solid #354b65; border-radius: 8px; padding: 8px 13px; color: #e8f0fc; box-shadow: none; text-shadow: none; }
-.niri-bridge button:hover { background: #304861; border-color: #52739a; }
-.niri-bridge button:disabled { color: #718198; background: #1c2a3b; border-color: #29384b; }
-.niri-bridge button.suggested-action { background: #407adc; border-color: #568deb; color: white; font-weight: 600; }
-.niri-bridge button.suggested-action:hover { background: #518bea; }
-.niri-bridge button.flat { background: transparent; border-color: transparent; }
-.niri-bridge button.flat:hover { background: #25384e; }
-.niri-bridge .nav { border: none; background: transparent; padding: 13px 14px; }
-.niri-bridge .nav.selected { background: #263d5b; color: #c7dfff; }
+.niri-bridge button:not(.titlebutton) { background: #25364c; border: 1px solid #354b65; border-radius: 8px; padding: 8px 13px; color: #e8f0fc; box-shadow: none; text-shadow: none; }
+.niri-bridge button:not(.titlebutton):hover { background: #304861; border-color: #52739a; }
+.niri-bridge button:not(.titlebutton):disabled { color: #718198; background: #1c2a3b; border-color: #29384b; }
+.niri-bridge button:not(.titlebutton).suggested-action { background: #407adc; border-color: #568deb; color: white; font-weight: 600; }
+.niri-bridge button:not(.titlebutton).suggested-action:hover { background: #518bea; }
+.niri-bridge button:not(.titlebutton).flat { background: transparent; border-color: transparent; }
+.niri-bridge button:not(.titlebutton).flat:hover { background: #25384e; }
+.niri-bridge button.nav { border: none; background: transparent; padding: 13px 14px; }
+.niri-bridge button.nav.selected { background: #263d5b; color: #c7dfff; }
 .niri-bridge entry, .niri-bridge spinbutton { background: #111d2d; border: 1px solid #38506c; border-radius: 7px; color: #eef4ff; padding: 6px; }
 .niri-bridge entry:focus { border-color: #77abff; box-shadow: 0 0 0 1px #77abff; }
 .niri-bridge entry:disabled { color: #8697ad; }
-.niri-bridge combobox button { padding: 7px 10px; }
+.niri-bridge combobox button:not(.titlebutton) { padding: 7px 10px; }
 .niri-bridge checkbutton { padding: 8px 0; }
 .niri-bridge checkbutton check { border-radius: 4px; border-color: #527196; background: #142033; }
 .niri-bridge checkbutton check:checked { background: #427edc; color: white; }
@@ -45,5 +45,15 @@
 .niri-bridge scrollbar slider { background: #3a4d65; border-radius: 7px; min-width: 5px; }
 .niri-bridge dialog { background: #172334; }
 .niri-bridge spinbutton { padding: 0; }
-.niri-bridge spinbutton button { padding: 4px 6px; min-width: 12px; }
+.niri-bridge spinbutton button:not(.titlebutton) { padding: 4px 6px; min-width: 12px; }
 .niri-bridge spinbutton entry { padding: 6px 4px; }
+/* Window controls keep native geometry, but use visible symbolic icons on the
+   application's dark header even when KDE supplies a light GTK color palette. */
+.niri-bridge headerbar button.titlebutton { background-image: none; background-color: transparent; border-color: transparent; color: #e8f0fc; box-shadow: none; }
+.niri-bridge headerbar button.titlebutton:hover { background-image: none; background-color: #304861; }
+.niri-bridge headerbar button.titlebutton:active { background-image: none; background-color: #407adc; }
+.niri-bridge headerbar button.titlebutton image { color: #e8f0fc; -gtk-icon-style: symbolic; }
+.niri-bridge headerbar button.titlebutton.close image { -gtk-icon-source: -gtk-icontheme("window-close-symbolic"); }
+.niri-bridge headerbar button.titlebutton.maximize image { -gtk-icon-source: -gtk-icontheme("window-maximize-symbolic"); }
+.niri-bridge.maximized headerbar button.titlebutton.maximize image { -gtk-icon-source: -gtk-icontheme("window-restore-symbolic"); }
+.niri-bridge headerbar button.titlebutton.minimize image { -gtk-icon-source: -gtk-icontheme("window-minimize-symbolic"); }
