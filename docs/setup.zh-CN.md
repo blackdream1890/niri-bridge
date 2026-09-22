@@ -15,7 +15,7 @@ Ubuntu 运行依赖为 `python3-gi`、`python3-gi-cairo` 和 `gir1.2-gtk-3.0`。
 Ubuntu 推荐下载并校验 `.deb` 发行包，使用系统软件包安装器打开，或执行：
 
 ```sh
-sudo apt install ./niri-bridge-0.3.0-beta.2-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-0.3.0-beta.3-ubuntu26.04-amd64.deb
 ```
 
 随后从应用启动器打开 NiriBridge，以桌面用户身份完成设置。软件包会安装依赖，将发行文件放在 `/usr/lib/niri-bridge`，并在用户下次打开应用时安全更新其个人安装。软件包维护本身不重启正在共享的会话。旧压缩包安装生成且未经修改的应用入口会转到这个更新入口；自定义启动器会保留。如果修改过启动器，请打开 `/usr/bin/niri-bridge-ui` 应用软件包更新。

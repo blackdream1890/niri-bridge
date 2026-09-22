@@ -13,7 +13,7 @@ The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tr
 For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
 
 ```sh
-sudo apt install ./niri-bridge-0.3.0-beta.2-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-0.3.0-beta.3-ubuntu26.04-amd64.deb
 ```
 
 Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.

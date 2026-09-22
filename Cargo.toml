@@ -1,6 +1,6 @@
 [package]
 name = "niri-bridge"
-version = "0.3.0-beta.2"
+version = "0.3.0-beta.3"
 edition = "2024"
 rust-version = "1.98"
 description = "Bidirectional keyboard and pointer sharing for Niri and KDE Plasma on Wayland"

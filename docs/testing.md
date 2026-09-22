@@ -28,6 +28,8 @@ python3 -W ignore::DeprecationWarning:gi.events -B ui/test_ui.py
 NIRI_BRIDGE_UI_TEST_LANGUAGE=zh_CN python3 -W ignore::DeprecationWarning:gi.events -B ui/test_ui.py
 ```
 
+Pairing-file tests retain only weak observer references to the real native chooser, so premature dialog collection fails the regression. They exercise export to a temporary file, import into the review step, cancellation, repeated clicks and destruction of the parent without modifying real pairing or starting sharing.
+
 They exercise the actual button handlers, paired screen request construction, initial-load side effects and language switching with unsaved edits. The warning filter is limited to the installed PyGObject/Python compatibility deprecation. GTK and application errors remain visible.
 
 The renderer draws only the application's own widgets to Cairo PNGs. It does not take a desktop screenshot or alter the shared clipboard. Inspect every page in both languages after layout changes, then remove temporary QA images.

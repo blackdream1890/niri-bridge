@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """UI behavior tests use simulated state and never call the live input service."""
 import copy
+import gc
+import weakref
 import json
 import os
 from pathlib import Path
@@ -29,7 +31,7 @@ def fixture():
               'identity': certificate, 'peer': dict(certificate, name='desktop', fingerprint='fedcba9876543210' * 4),
               'settings': {'connection': {'mode': 'connect', 'address': 'desktop.local:42420'},
                            'activity_devices': ['/dev/input/by-path/test-keyboard', '/dev/input/by-path/test-touchpad'], 'native_touchpads': True}}
-    return {'version': '0.3.0-beta.2', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
+    return {'version': '0.3.0-beta.3', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
             'status': {'connection': 'connected', 'role': 'local', 'local_unlocked': True, 'peer_unlocked': True,
                        'peer_name': 'desktop', 'latency_ms': 1.6, 'local': local, 'peer': peer, 'configuring': False},
             'devices': {'uinput_writable': True, 'devices': [
@@ -151,6 +153,86 @@ class GeometryTests(unittest.TestCase):
             model.apply_layout(draft.request())
         self.assertEqual(result.exception.code, 'backend_update_required')
         self.assertEqual(model.rpc.call_count, 1)
+
+
+class FileChooserTests(unittest.TestCase):
+    def setUp(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest('A GTK display is required')
+        self.model = FakeModel()
+        with mock.patch('app.Window.setup_tray'):
+            self.window = Window(None, self.model)
+        pump(lambda: self.window.info is not None and not self.window.busy)
+        self.window.navigate('pair')
+        self.references = []
+        create = Gtk.FileChooserNative.new
+        def track(*args):
+            dialog = create(*args)
+            self.references.append(weakref.ref(dialog))
+            return dialog
+        self.factory = mock.patch('app.Gtk.FileChooserNative.new', side_effect=track)
+        self.factory.start()
+
+    def tearDown(self):
+        self.window.destroy()
+        self.factory.stop()
+        self.model.directory.cleanup()
+
+    def open_chooser(self, button):
+        button.emit('clicked')
+        gc.collect()
+        dialog = self.references[-1]()
+        self.assertIsNotNone(dialog, 'The native chooser was collected before the user could respond')
+        self.assertTrue(dialog.get_visible())
+        return dialog
+
+    def test_export_stays_open_and_writes_only_the_public_pairing_file(self):
+        dialog = self.open_chooser(self.window.export_button)
+        destination = Path(self.model.directory.name) / 'export.pem'
+        dialog.set_current_folder(str(destination.parent))
+        dialog.set_current_name(destination.name)
+        pump(lambda: dialog.get_filename() == str(destination))
+        dialog.emit('response', Gtk.ResponseType.ACCEPT)
+        pump(lambda: destination.exists() and not self.window.busy)
+        self.assertEqual(destination.read_text(), self.model.data['config']['identity']['pem'])
+        self.assertIsNone(self.window.file_chooser)
+        self.assertEqual(self.model.actions, [])
+
+    def test_import_cancel_and_reopen_then_review_without_changing_pairing(self):
+        self.model.inspect_certificate = mock.Mock(return_value=self.model.data['config']['peer'])
+        with mock.patch.object(self.window, 'review_peer') as review:
+            dialog = self.open_chooser(self.window.import_button)
+            self.window.import_button.emit('clicked')
+            self.window.export_button.emit('clicked')
+            self.assertEqual(len(self.references), 1)
+            dialog.emit('response', Gtk.ResponseType.CANCEL)
+            self.assertIsNone(self.window.file_chooser)
+            self.model.inspect_certificate.assert_not_called()
+            review.assert_not_called()
+            candidate = Path(self.model.directory.name) / 'peer.pem'
+            candidate.write_text('synthetic public pairing file')
+            dialog = self.open_chooser(self.window.import_button)
+            dialog.set_filename(str(candidate))
+            pump(lambda: dialog.get_filename() == str(candidate))
+            dialog.emit('response', Gtk.ResponseType.ACCEPT)
+            pump(lambda: review.called)
+            self.model.inspect_certificate.assert_called_once_with(candidate)
+            review.assert_called_once_with(candidate, self.model.data['config']['peer'])
+            self.assertIsNone(self.window.file_chooser)
+            self.assertEqual(self.model.actions, [])
+
+    def test_destroying_parent_closes_pending_chooser_without_exporting(self):
+        dialog = self.open_chooser(self.window.export_button)
+        destination = Path(self.model.directory.name) / 'cancelled.pem'
+        dialog.set_current_folder(str(destination.parent))
+        dialog.set_current_name(destination.name)
+        pump(lambda: dialog.get_filename() == str(destination))
+        self.window.destroy()
+        self.assertFalse(dialog.get_visible())
+        self.assertIsNone(self.window.file_chooser)
+        dialog.emit('response', Gtk.ResponseType.ACCEPT)
+        self.assertFalse(destination.exists())
+        self.assertEqual(self.model.actions, [])
 
 
 class WidgetTests(unittest.TestCase):

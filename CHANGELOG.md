@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0-beta.3
+
+- Keep native pairing-file dialogs alive until the user selects a file or cancels, fixing export and import buttons that appeared to do nothing on Niri and KDE.
+- Reuse the pending chooser on repeated clicks and close it when its parent is destroyed; late responses cannot export or initiate pairing.
+- Add real GTK chooser regressions for public-certificate export, import review, cancellation, reopening and parent cleanup. Fingerprint confirmation remains mandatory.
+
 ## 0.3.0-beta.2
 
 - Update rustls to 0.23.45 to address RUSTSEC-2026-0285; keep the release audit gate enabled.

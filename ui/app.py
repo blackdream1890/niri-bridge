@@ -90,6 +90,7 @@ class Window(Gtk.ApplicationWindow):
         self.settings_revision = None
         self.layout_key = None
         self.device_checks = []
+        self.file_chooser = None
         self.tray = None
         self.render_dir = Path(render_dir) if render_dir else None
         self.rendered = False
@@ -945,7 +946,14 @@ class Window(Gtk.ApplicationWindow):
         self.work(_("Creating this computer's identity…"), lambda: self.model.initialize(name, settings, edge), lambda _unused: self.reload_all(_("This computer's identity is ready. Exchange pairing files with the other computer.")))
 
     def choose_file(self, title, save, callback, name=None):
+        if self.file_chooser is not None:
+            self.file_chooser.show()
+            return
         chooser = Gtk.FileChooserNative.new(title, self, Gtk.FileChooserAction.SAVE if save else Gtk.FileChooserAction.OPEN, _("Save") if save else _("Choose"), _("Cancel"))
+        # Unlike a Gtk.Window, a shown Gtk.NativeDialog is not kept alive by GTK.
+        # Own it until response or parent destruction, including portal-backed dialogs.
+        self.file_chooser = chooser
+        chooser.set_modal(True)
         file_filter = Gtk.FileFilter()
         file_filter.set_name(_("NiriBridge pairing files (*.pem)"))
         file_filter.add_pattern('*.pem')
@@ -954,9 +962,12 @@ class Window(Gtk.ApplicationWindow):
         if name:
             chooser.set_current_name(name)
         def response(dialog, result):
-            path = dialog.get_filename()
+            if self.file_chooser is not dialog:
+                return
+            path = dialog.get_filename() if result == Gtk.ResponseType.ACCEPT else None
+            self.file_chooser = None
             dialog.destroy()
-            if result == Gtk.ResponseType.ACCEPT and path:
+            if self.alive and path:
                 callback(Path(path))
         chooser.connect('response', response)
         chooser.show()
@@ -1080,6 +1091,9 @@ class Window(Gtk.ApplicationWindow):
 
     def on_destroy(self, *_unused):
         self.alive = False
+        chooser, self.file_chooser = self.file_chooser, None
+        if chooser is not None:
+            chooser.destroy()
         if hasattr(self, 'poll_source'):
             GLib.source_remove(self.poll_source)
         self.executor.shutdown(wait=False, cancel_futures=True)
