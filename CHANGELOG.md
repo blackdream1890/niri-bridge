@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.3.0-beta.1
+## 0.3.0-beta.2
+
+- Update rustls to 0.23.45 to address RUSTSEC-2026-0285; keep the release audit gate enabled.
 
 - Automatically detect Niri and KDE Plasma Wayland from the active compositor socket.
 - Discover KDE logical output geometry, including fractional scaling and rotated displays.

@@ -913,11 +913,11 @@
       ],
       "repository": "https://github.com/rustls/rustls",
       "upstream_notices": [
-        "upstream/rustls-0.23.44/LICENSE-APACHE",
-        "upstream/rustls-0.23.44/LICENSE-ISC",
-        "upstream/rustls-0.23.44/LICENSE-MIT"
+        "upstream/rustls-0.23.45/LICENSE-APACHE",
+        "upstream/rustls-0.23.45/LICENSE-ISC",
+        "upstream/rustls-0.23.45/LICENSE-MIT"
       ],
-      "version": "0.23.44"
+      "version": "0.23.45"
     },
     {
       "declared_license": "MIT OR Apache-2.0",

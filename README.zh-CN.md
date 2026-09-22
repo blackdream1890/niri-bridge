@@ -14,7 +14,7 @@ NiriBridge 在两台运行 Niri 或 KDE Plasma 的 Ubuntu Wayland 电脑之间�
 
 ## 桌面界面
 
-从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
+从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-0.3.0-beta.2-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
 
 仍提供 x86_64 压缩包。安装[运行依赖](docs/setup.zh-CN.md)并解压后，以桌面用户执行：
 

@@ -14,7 +14,7 @@ This is an early beta for Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland
 
 ## Desktop interface
 
-Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.3.0-beta.1-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
+Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.3.0-beta.2-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
 
 The portable x86_64 archive remains available. After installing the [runtime dependencies](docs/setup.md), extract it and run as your desktop user:
 
