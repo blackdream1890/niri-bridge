@@ -107,9 +107,9 @@ fn wait_for_kwin(pid: libc::pid_t, syspath: std::path::PathBuf) -> Result<()> {
                         "KWin D-Bus belongs to another graphical session"
                     );
                     let proxy: zbus::Proxy<'_> = zbus::proxy::Builder::new(&connection)
-                        .destination("org.kde.KWin")?
-                        .path("/org/kde/KWin/InputDevice")?
-                        .interface("org.kde.KWin.InputDeviceManager")?
+                        .destination("org.kde.KWin")
+                        .path("/org/kde/KWin/InputDevice")
+                        .interface("org.kde.KWin.InputDeviceManager")
                         .cache_properties(zbus::proxy::CacheProperties::No)
                         .build()
                         .await?;

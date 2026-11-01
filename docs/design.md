@@ -42,6 +42,10 @@ Absolute pointer placement applies the inverse of the destination output transfo
 
 ## Desktop management
 
+The next saved-device extension retains one transport peer at a time while
+keeping other explicitly trusted computers and their individual connection and
+screen settings. See the [implementation and acceptance plan](multi-device-pairing.md).
+
 The user control directory is private, the socket has mode 0600, and peer credentials must identify the same user. An instance lock prevents duplicate service ownership. The API reports actual authenticated connection state, control direction, lock availability, desktop metadata and measured round-trip time; it does not expose input contents.
 
 Display metadata is refreshed outside the input loop and sent over the paired encrypted connection. The interface keeps drafts separate from live state. Dragging a computer changes the proposed cross-computer edge mapping while retaining its internal monitor topology.

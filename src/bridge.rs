@@ -39,6 +39,8 @@ pub struct Config {
     pub private_key: PathBuf,
     pub peer_certificate: PathBuf,
     pub peer_name: String,
+    #[serde(default)]
+    pub paired_devices: Vec<crate::pairing::SavedPeer>,
     pub connection: Connection,
     #[serde(alias = "edge", deserialize_with = "deserialize_edges")]
     pub edges: Vec<EdgeConfig>,
@@ -139,6 +141,12 @@ impl Config {
                 *file = parent.join(&*file);
             }
         }
+        for peer in &mut value.paired_devices {
+            if peer.certificate.is_relative() {
+                peer.certificate = parent.join(&peer.certificate);
+            }
+        }
+        crate::pairing::validate(&value)?;
         validate_edges(&value.edges)?;
         ensure!(
             !value.activity_devices.is_empty() && value.activity_devices.len() <= 32,
@@ -193,12 +201,23 @@ fn connection_error_code(error: &anyhow::Error) -> &'static str {
 }
 
 async fn run_async(mut config: Config) -> Result<()> {
+    let _running = config
+        .source_path
+        .as_ref()
+        .map(|path| control::configuration_guard(path))
+        .transpose()?;
     let (_control_server, control) =
         control::Server::start(control::Snapshot::new(config.peer_name.clone()))?;
+    // Selection may have finished after the CLI read the file but before this
+    // process acquired the instance lock. Bind TLS and inputs to the locked view.
+    if let Some(path) = &config.source_path {
+        config = Config::load(path)?;
+    }
+    control.update(|s| s.peer_name = config.peer_name.clone());
     let session_id = crate::session::current_id().await?;
     let mut monitor = Monitor::start(session_id);
     let local = Identity::load(&config.certificate, &config.private_key)?;
-    let peer = transport::load_certificate(&config.peer_certificate)?;
+    let peer = crate::pairing::selected_certificate(&config)?;
     let client = transport::client_config(&local, peer.clone())?;
     let server = transport::server_config(&local, peer)?;
     let mut activity = ActivityMonitor::new(&config.activity_devices, config.native_touchpads)?;

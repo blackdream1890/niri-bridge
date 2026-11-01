@@ -2,7 +2,7 @@
 //! Configuration operations shared by the desktop UI and paired layout updates.
 use crate::{
     bridge::{Config, Connection, EdgeConfig, validate_edges},
-    desktop, identity, transport,
+    desktop, identity, pairing, transport,
 };
 use anyhow::{Context, Result, ensure};
 use clap::Subcommand;
@@ -64,6 +64,7 @@ pub struct View {
     pub peer_name: String,
     pub identity: Option<CertificateInfo>,
     pub peer: Option<CertificateInfo>,
+    pub paired_devices: Vec<pairing::Summary>,
 }
 
 fn openssl(path: &Path, args: &[&str]) -> Result<String> {
@@ -113,7 +114,16 @@ pub fn certificate(path: &Path) -> Result<CertificateInfo> {
 }
 pub fn view(path: &Path) -> Result<View> {
     let c = Config::load(path).context("config_invalid")?;
+    let peer = certificate(&c.peer_certificate).ok().filter(|info| {
+        c.paired_devices.is_empty()
+            || c.paired_devices.iter().any(|p| {
+                p.certificate == c.peer_certificate
+                    && p.fingerprint == info.fingerprint
+                    && p.name == info.name
+            })
+    });
     Ok(View {
+        paired_devices: pairing::summaries(&c)?,
         revision: revision(path)?,
         settings: Settings {
             connection: c.connection,
@@ -123,7 +133,7 @@ pub fn view(path: &Path) -> Result<View> {
         edges: c.edges,
         peer_name: c.peer_name,
         identity: certificate(&c.certificate).ok(),
-        peer: certificate(&c.peer_certificate).ok(),
+        peer,
     })
 }
 fn lock(path: &Path) -> Result<File> {
@@ -176,7 +186,9 @@ impl Prepared {
         let before = fs::read_to_string(path)?;
         ensure!(digest(before.as_bytes()) == expected, "settings_conflict");
         let mut doc = before.parse::<DocumentMut>().context("config_invalid")?;
+        pairing::sync_selected(&mut doc)?;
         edit(&mut doc)?;
+        pairing::sync_selected(&mut doc)?;
         let next = doc.to_string();
         let mut temp = tempfile::NamedTempFile::new_in(path.parent().unwrap())?;
         temp.write_all(next.as_bytes())?;
@@ -270,7 +282,7 @@ pub fn prepare_edges(path: &Path, expected: &str, edges: &[EdgeConfig]) -> Resul
     Ok(prepared)
 }
 
-fn write_edges(doc: &mut DocumentMut, edges: &[EdgeConfig]) {
+pub(crate) fn write_edges(doc: &mut DocumentMut, edges: &[EdgeConfig]) {
     fn clear_positions(table: &mut toml_edit::Table) {
         table.set_position(None);
         for (_, item) in table.iter_mut() {
@@ -329,9 +341,8 @@ fn settings(doc: &mut DocumentMut, s: &Settings) -> Result<()> {
             .all(|p| p.is_absolute() && p.starts_with("/dev/input")),
         "input_path_invalid"
     );
-    let (mode, address) = match &s.connection {
-        Connection::Listen { address } => ("listen", address),
-        Connection::Connect { address } => ("connect", address),
+    let address = match &s.connection {
+        Connection::Listen { address } | Connection::Connect { address } => address,
     };
     ensure!(
         address.len() <= 300
@@ -342,8 +353,7 @@ fn settings(doc: &mut DocumentMut, s: &Settings) -> Result<()> {
                 .is_some_and(|p| p > 0),
         "address_invalid"
     );
-    doc["connection"]["mode"] = value(mode);
-    doc["connection"]["address"] = value(address);
+    pairing::write_connection(doc, &s.connection);
     doc["native_touchpads"] = value(s.native_touchpads);
     let mut array = toml_edit::Array::new();
     for p in &s.activity_devices {
@@ -374,22 +384,21 @@ pub fn import_peer(
         info.fingerprint != certificate(&config.certificate)?.fingerprint,
         "pair_same_device"
     );
-    let destination = path.parent().unwrap().join("peer.pem");
-    let previous = fs::read_to_string(&destination).ok();
     let mut prepared = Prepared::edit(path, expected, |doc| {
-        doc["peer_name"] = value(&info.name);
-        doc["peer_certificate"] = value("peer.pem");
-        Ok(())
+        pairing::add(doc, path.parent().context("config_invalid")?, &info)
     })?;
-    atomic(&destination, &info.pem)?;
-    if let Err(error) = prepared.commit() {
-        if let Some(before) = previous {
-            atomic(&destination, &before)?;
-        } else {
-            fs::remove_file(destination)?;
-        }
-        return Err(error);
-    }
+    prepared.commit()?;
+    let revision = prepared.after_revision.clone();
+    prepared.finish();
+    Ok(revision)
+}
+pub fn select_peer(path: &Path, expected: &str, fingerprint: &str) -> Result<String> {
+    let _running = crate::control::configuration_guard(path)?;
+    let _idle = crate::control::stopped_guard()?;
+    let mut prepared = Prepared::edit(path, expected, |doc| {
+        pairing::select(doc, path.parent().context("config_invalid")?, fingerprint)
+    })?;
+    prepared.commit()?;
     let revision = prepared.after_revision.clone();
     prepared.finish();
     Ok(revision)
@@ -442,6 +451,9 @@ pub fn error_code(error: &anyhow::Error) -> &'static str {
         "input_path_invalid",
         "address_invalid",
         "pair_same_device",
+        "peer_not_found",
+        "peer_certificate_changed",
+        "sharing_running",
         "config_exists",
         "session_locked",
         "peer_offline",
@@ -480,6 +492,14 @@ pub enum Command {
         #[arg(long)]
         fingerprint: String,
     },
+    SelectPeer {
+        #[arg(long)]
+        config: PathBuf,
+        #[arg(long)]
+        revision: String,
+        #[arg(long)]
+        fingerprint: String,
+    },
     Initialize {
         #[arg(long)]
         config: PathBuf,
@@ -504,6 +524,13 @@ pub fn run(command: Command) {
                 fingerprint,
             } => {
                 serde_json::json!({"revision":import_peer(&config,&candidate,&revision,&fingerprint)?})
+            }
+            Command::SelectPeer {
+                config,
+                revision,
+                fingerprint,
+            } => {
+                serde_json::json!({"revision":select_peer(&config, &revision, &fingerprint)?})
             }
             Command::Initialize {
                 config,
@@ -676,10 +703,112 @@ mod tests {
         import_peer(&path, &candidate, &hash, &info.fingerprint).unwrap();
         assert_eq!(Config::load(&path).unwrap().peer_name, "peer");
         assert_eq!(
-            certificate(&directory.path().join("peer.pem"))
+            certificate(&Config::load(&path).unwrap().peer_certificate)
                 .unwrap()
                 .fingerprint,
             info.fingerprint
+        );
+    }
+    #[test]
+    fn paired_layout_snapshots_commit_and_rollback_with_the_same_configuration() {
+        use std::os::unix::fs::PermissionsExt;
+        let (directory, path) = config();
+        let other = tempfile::tempdir().unwrap();
+        for directory in [directory.path(), other.path()] {
+            fs::set_permissions(directory, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        identity::create(directory.path(), "local").unwrap();
+        identity::create(other.path(), "other").unwrap();
+        let candidate = other.path().join("identity.pem");
+        let info = certificate(&candidate).unwrap();
+        import_peer(
+            &path,
+            &candidate,
+            &revision(&path).unwrap(),
+            &info.fingerprint,
+        )
+        .unwrap();
+        let original = fs::read(&path).unwrap();
+        let mut edges = Config::load(&path).unwrap().edges;
+        edges[0].boundary.edge = crate::geometry::Edge::Bottom;
+        let mut side = edges[0].clone();
+        side.id = "side".into();
+        side.boundary.edge = crate::geometry::Edge::Left;
+        edges.push(side);
+        {
+            let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+                write_edges(doc, &edges);
+                Ok(())
+            })
+            .unwrap();
+            prepared.commit().unwrap();
+            let config = Config::load(&path).unwrap();
+            assert_eq!(config.paired_devices[0].edges.len(), 2);
+            assert_eq!(
+                config.paired_devices[0].edges[0].boundary.edge,
+                crate::geometry::Edge::Bottom
+            );
+            // An unacknowledged paired transaction restores snapshots and runtime values together.
+        }
+        assert!(fs::read(&path).unwrap() == original);
+        let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+            write_edges(doc, &edges);
+            Ok(())
+        })
+        .unwrap();
+        prepared.commit().unwrap();
+        prepared.finish();
+        let config = Config::load(&path).unwrap();
+        assert_eq!(config.edges.len(), 2);
+        assert_eq!(config.paired_devices[0].edges.len(), 2);
+        let alternative = tempfile::tempdir().unwrap();
+        fs::set_permissions(alternative.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        identity::create(alternative.path(), "alternative").unwrap();
+        let candidate = alternative.path().join("identity.pem");
+        let alternative = certificate(&candidate).unwrap();
+        import_peer(
+            &path,
+            &candidate,
+            &revision(&path).unwrap(),
+            &alternative.fingerprint,
+        )
+        .unwrap();
+        let choose = |fingerprint: &str| {
+            let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+                pairing::select(doc, path.parent().unwrap(), fingerprint)
+            })
+            .unwrap();
+            prepared.commit().unwrap();
+            prepared.finish();
+        };
+        choose(&alternative.fingerprint);
+        let mut alternate_edge = Config::load(&path).unwrap().edges[0].clone();
+        alternate_edge.boundary.edge = crate::geometry::Edge::Right;
+        let mut prepared = Prepared::edit(&path, &revision(&path).unwrap(), |doc| {
+            write_edges(doc, &[alternate_edge]);
+            Ok(())
+        })
+        .unwrap();
+        prepared.commit().unwrap();
+        prepared.finish();
+        choose(&info.fingerprint);
+        let restored = Config::load(&path).unwrap();
+        assert_eq!(restored.edges.len(), 2);
+        assert_eq!(
+            restored.edges[0].boundary.edge,
+            crate::geometry::Edge::Bottom
+        );
+        choose(&alternative.fingerprint);
+        let restored = Config::load(&path).unwrap();
+        assert_eq!(restored.edges.len(), 1);
+        assert_eq!(
+            restored.edges[0].boundary.edge,
+            crate::geometry::Edge::Right
+        );
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("# Keep this comment")
         );
     }
 }

@@ -4,7 +4,7 @@ use anyhow::{Context, Result, ensure};
 use futures_util::StreamExt;
 use std::time::Duration;
 use tokio::{sync::watch, time::timeout};
-use zbus::{Proxy, proxy::CacheProperties, zvariant::OwnedObjectPath};
+use zbus::{OwnedObjectPath, Proxy, proxy::CacheProperties};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -136,9 +136,9 @@ async fn monitor_session(session_id: &str, sender: &watch::Sender<Status>) -> Re
     )
     .await??;
     let session: Proxy<'_> = zbus::proxy::Builder::new(&connection)
-        .destination("org.freedesktop.login1")?
-        .path(path.clone())?
-        .interface("org.freedesktop.login1.Session")?
+        .destination("org.freedesktop.login1")
+        .path(path.clone())
+        .interface("org.freedesktop.login1.Session")
         .cache_properties(CacheProperties::No)
         .build()
         .await?;

@@ -92,7 +92,7 @@ fn fixture_node() {
         .unwrap()
         .block_on(async move {
             let local = Identity::load(&config.certificate, &config.private_key).unwrap();
-            let peer = transport::load_certificate(&config.peer_certificate).unwrap();
+            let peer = niri_bridge::pairing::selected_certificate(&config).unwrap();
             let mut tls: tokio_rustls::TlsStream<tokio::net::TcpStream> = match &config.connection {
                 Connection::Listen { address } => {
                     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
@@ -183,6 +183,17 @@ fn launch(
     peer_name: &str,
     edge: &str,
 ) -> ManagedChild {
+    let path = write_config(desktop, mode, address, peer_name, edge);
+    launch_path(desktop, &path)
+}
+
+fn write_config(
+    desktop: &Desktop,
+    mode: &str,
+    address: &str,
+    peer_name: &str,
+    edge: &str,
+) -> PathBuf {
     let path = desktop.runtime().join("bridge.toml");
     fs::write(
         &path,
@@ -203,7 +214,7 @@ boundary = {{ edge = "{edge}", start = 0.1, end = 0.9 }}
         ),
     )
     .unwrap();
-    launch_path(desktop, &path)
+    path
 }
 
 fn launch_path(desktop: &Desktop, path: &Path) -> ManagedChild {
@@ -936,8 +947,27 @@ fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
     drop(listener);
-    let node_a = launch(&desktop, "listen", &address, "laptop", "bottom");
-    let node_b = launch(&laptop, "connect", &address, "desktop", "top");
+    let path_a = write_config(&desktop, "listen", &address, "laptop", "bottom");
+    let path_b = write_config(&laptop, "connect", &address, "desktop", "top");
+    let alternate = desktop.runtime().join("alternate");
+    identity::create(&alternate, "alternate").unwrap();
+    for (path, candidate) in [
+        (&path_a, desktop.runtime().join("peer.pem")),
+        (&path_b, laptop.runtime().join("peer.pem")),
+        (&path_a, alternate.join("identity.pem")),
+        (&path_b, alternate.join("identity.pem")),
+    ] {
+        let info = niri_bridge::manager::certificate(&candidate).unwrap();
+        niri_bridge::manager::import_peer(
+            path,
+            &candidate,
+            &niri_bridge::manager::revision(path).unwrap(),
+            &info.fingerprint,
+        )
+        .unwrap();
+    }
+    let node_a = launch_path(&desktop, &path_a);
+    let node_b = launch_path(&laptop, &path_b);
     wait_for(
         || layer_present(&desktop) && layer_present(&laptop),
         &[&desktop, &laptop],
@@ -990,6 +1020,22 @@ fn desktop_ui_synchronizes_both_files_and_rejects_conflicts() {
     assert_eq!(b.edges.len(), 2);
     assert_eq!(a.edges[1].id, "side");
     assert_eq!(b.edges[1].id, "side");
+    for config in [&a, &b] {
+        assert_eq!(config.paired_devices.len(), 2);
+        let selected = config
+            .paired_devices
+            .iter()
+            .find(|p| p.certificate == config.peer_certificate)
+            .unwrap();
+        assert_eq!(selected.edges.len(), 2);
+        assert_eq!(selected.edges[1].id, "side");
+        let inactive = config
+            .paired_devices
+            .iter()
+            .find(|p| p.name == "alternate")
+            .unwrap();
+        assert_eq!(inactive.edges.len(), 1);
+    }
     assert_eq!(
         reply["data"]["local_revision"],
         niri_bridge::manager::revision(&desktop.runtime().join("bridge.toml")).unwrap()

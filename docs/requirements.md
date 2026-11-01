@@ -18,6 +18,13 @@ English · [简体中文](requirements.zh-CN.md)
 
 ## Configuration and community scope
 
+The next release must retain multiple explicitly paired computers and their
+individual connection and screen settings, with one selected sharing target at a
+time. Adding a computer must preserve earlier certificates and fingerprints.
+See [saved-device requirements and 1.0 gates](multi-device-pairing.md) for scope,
+switching decisions and acceptance. These requirements are under implementation;
+they are not completed real-device acceptance.
+
 Hostnames, addresses, output names, resolution, scaling and physical devices must be configurable or discovered from actual capabilities. Examples use generic names and fictional addresses. Personal acceptance records are kept in the ignored `.local/` directory.
 
 The initial multi-monitor acceptance arrangement has two desktop monitors, one in portrait orientation, and a laptop below the landscape monitor. This is a test arrangement, not a hardware restriction. Crossings use logical coordinates and normalized boundary ranges, including scaling and rotation.

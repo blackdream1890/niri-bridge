@@ -87,7 +87,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             let config = bridge::Config::load(&config)?;
             let identity =
                 niri_bridge::transport::Identity::load(&config.certificate, &config.private_key)?;
-            let peer = niri_bridge::transport::load_certificate(&config.peer_certificate)?;
+            let peer = niri_bridge::pairing::selected_certificate(&config)?;
             niri_bridge::transport::client_config(&identity, peer.clone())?;
             niri_bridge::transport::server_config(&identity, peer)?;
             println!(

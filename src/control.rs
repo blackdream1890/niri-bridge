@@ -194,7 +194,7 @@ impl Control {
     }
 }
 pub struct Server {
-    _lock: File,
+    _lock: InstanceGuard,
     path: PathBuf,
     task: tokio::task::JoinHandle<()>,
     output_task: Option<tokio::task::JoinHandle<()>>,
@@ -204,6 +204,62 @@ pub fn socket_path() -> Result<PathBuf> {
         std::env::var_os("XDG_RUNTIME_DIR").context("Graphical runtime directory is missing")?,
     )
     .join("niri-bridge/control.sock"))
+}
+pub struct InstanceGuard(File);
+impl Drop for InstanceGuard {
+    fn drop(&mut self) {
+        unsafe {
+            libc::flock(self.0.as_raw_fd(), libc::LOCK_UN);
+        }
+    }
+}
+fn instance_guard(path: &Path) -> Result<InstanceGuard> {
+    let directory = path.parent().context("Invalid control path")?;
+    if !directory.exists() {
+        fs::create_dir(directory)?;
+        fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
+    }
+    let metadata = fs::symlink_metadata(directory)?;
+    ensure!(
+        metadata.is_dir()
+            && metadata.uid() == unsafe { libc::geteuid() }
+            && metadata.mode() & 0o077 == 0,
+        "Control directory must be private and user-owned"
+    );
+    private_lock(&directory.join("instance.lock"))
+}
+fn private_lock(path: &Path) -> Result<InstanceGuard> {
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    let metadata = lock.metadata()?;
+    ensure!(
+        metadata.is_file()
+            && metadata.uid() == unsafe { libc::geteuid() }
+            && metadata.mode() & 0o077 == 0,
+        "settings_permissions"
+    );
+    ensure!(
+        unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+        "sharing_running"
+    );
+    Ok(InstanceGuard(lock))
+}
+/// A configuration's running lock is independent of the caller's session environment.
+pub fn configuration_guard(path: &Path) -> Result<InstanceGuard> {
+    private_lock(&path.canonicalize()?.with_extension("running.lock"))
+}
+/// Serialize selection with backend startup without removing a live socket or lock.
+pub fn stopped_guard() -> Result<Option<InstanceGuard>> {
+    match socket_path() {
+        Ok(path) => Ok(Some(instance_guard(&path)?)),
+        Err(_) => Ok(None),
+    }
 }
 impl Server {
     pub fn start(snapshot: Snapshot) -> Result<(Self, Control)> {
@@ -231,28 +287,7 @@ impl Server {
         Ok((server, control))
     }
     fn start_at(path: &Path, snapshot: Snapshot) -> Result<(Self, Control)> {
-        let directory = path.parent().context("Invalid control path")?;
-        if !directory.exists() {
-            fs::create_dir(directory)?;
-            fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
-        }
-        let m = fs::symlink_metadata(directory)?;
-        ensure!(
-            m.is_dir() && m.uid() == unsafe { libc::geteuid() } && m.mode() & 0o077 == 0,
-            "Control directory must be private and user-owned"
-        );
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(directory.join("instance.lock"))?;
-        ensure!(
-            unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
-            "NiriBridge is already running"
-        );
+        let lock = instance_guard(path)?;
         if let Ok(m) = fs::symlink_metadata(path) {
             ensure!(
                 m.file_type().is_socket() && m.uid() == unsafe { libc::geteuid() },

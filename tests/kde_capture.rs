@@ -127,7 +127,7 @@ fn isolated_kwin_worker() {
         )
         .await
         .unwrap();
-        let (fd, cookie): (zbus::zvariant::OwnedFd, i32) =
+        let (fd, cookie): (zbus::OwnedFd, i32) =
             proxy.call("connectToEIS", &(2i32,)).await.unwrap();
         (connection, fd, cookie)
     });

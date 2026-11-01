@@ -26,6 +26,9 @@ ERRORS = {
     'certificate_name_ambiguous': N_("This certificate does not have a unique device name. Export it again with NiriBridge."),
     'certificate_changed': N_("The pairing file changed after verification. Select it again and recheck the fingerprint."),
     'pair_same_device': N_("This is your own pairing file. Select the file exported by the other computer."),
+    'peer_not_found': N_("This saved computer is no longer available. Reload the device list and select it again."),
+    'peer_certificate_changed': N_("This computer's saved pairing file is missing or changed. Import its pairing file again and verify the fingerprint."),
+    'sharing_running': N_("Stop sharing before switching computers, then try again."),
     'output_unavailable': N_("The selected display is unavailable. Choose an active display."),
     'layout_invalid': N_("The entry range is invalid. Its start must be before its end."),
     'layout_overlap': N_("Connections overlap on the same screen edge. Adjust their ranges or remove a connection."),
@@ -233,6 +236,8 @@ class Model:
 
     def save_settings(self, revision, settings):
         self.ensure_managed()
+        if not self.controls_current_config():
+            raise OperationError('config_changed')
         active = self.service().get('ActiveState') == 'active' and self.controls_current_config()
         result = self._with_request('save', {'revision': revision, 'settings': settings})
         if active:
@@ -247,6 +252,8 @@ class Model:
 
     def import_peer(self, path, revision, fingerprint):
         self.ensure_managed()
+        if not self.controls_current_config():
+            raise OperationError('config_changed')
         active = self.service().get('ActiveState') == 'active' and self.controls_current_config()
         if active:
             self.set_running(False)
@@ -257,6 +264,14 @@ class Model:
             if active:
                 self.set_running(True)
         return result
+
+    def select_peer(self, revision, fingerprint):
+        self.ensure_managed()
+        if not self.controls_current_config():
+            raise OperationError('config_changed')
+        self.set_running(False)
+        return self.manage('select-peer', '--config', self.config,
+                           '--revision', revision, '--fingerprint', fingerprint)
 
     def grant_devices(self):
         # The existing reviewed installer owns all privileged behavior.

@@ -60,6 +60,26 @@ not replace multi-monitor physical acceptance.
 
 The fixtures' keyboard injection and physical activity/lock markers are controlled test backends. They do not by themselves prove real uinput, logind signals or all touchpad gestures. Each fixture cleans up its own processes and temporary files.
 
+## Saved-device regression coverage
+
+`cargo test --locked --test saved_devices` uses temporary identities and loopback
+TLS, without opening input devices. It covers legacy migration, equal device
+names with different certificates, duplicate import, independent connection
+settings, changed-certificate rejection and reviewed repair, stale revisions,
+and running-configuration locks independent of the calling session environment.
+Saved but unselected peers must fail a real TLS application handshake before
+and after a target switch.
+
+The paired-screen coordinator test also runs with multiple saved computers on
+both endpoints and checks that the selected screen snapshot changes while the
+other saved computer's entries remain untouched. Unit tests check that an
+unacknowledged layout commit restores the profile and runtime settings together.
+GTK tests cover explicit switching, unsaved edits, stop failures, stale poll
+results and language changes. The archive installation smoke builds three
+identities and verifies saved-device switching and retained data after upgrade
+and removal. These checks do not substitute for physical multi-device acceptance;
+see [the release checklist](multi-device-pairing.md).
+
 ## Read-only diagnosis
 
 ```sh

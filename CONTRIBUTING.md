@@ -2,7 +2,7 @@
 
 English · [简体中文](CONTRIBUTING.zh-CN.md)
 
-NiriBridge is an early beta licensed under GPL-3.0-or-later. Contributions are submitted under the same project license unless explicitly agreed otherwise. Preserve third-party attribution and license notices. The current development target is Ubuntu 26.04 with Niri 26.04.
+NiriBridge is licensed under GPL-3.0-or-later. Contributions are submitted under the same project license unless explicitly agreed otherwise. Preserve third-party attribution and license notices. The current development target is Ubuntu 26.04 with Niri 26.04.
 
 ## Work from demonstrated behavior
 

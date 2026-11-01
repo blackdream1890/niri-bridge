@@ -11,6 +11,7 @@ pub mod input;
 pub mod manager;
 pub mod net_probe;
 pub mod niri;
+pub mod pairing;
 pub mod pointer;
 pub mod protocol;
 pub mod receiver;

@@ -84,12 +84,14 @@ class Window(Gtk.ApplicationWindow):
         self.poll_data = {'service': {}, 'status': None}
         self.busy = False
         self.poll_pending = False
+        self.poll_generation = 0
         self.updating = False
         self.settings_dirty = False
         self.layout_dirty = False
         self.settings_revision = None
         self.layout_key = None
         self.device_checks = []
+        self.paired_devices = {}
         self.file_chooser = None
         self.tray = None
         self.render_dir = Path(render_dir) if render_dir else None
@@ -284,6 +286,24 @@ class Window(Gtk.ApplicationWindow):
 
     def build_pair(self):
         page = self.page('pair', _("Devices & pairing"), _("Exchange pairing files to establish trust. Each computer keeps its own private key."))
+        saved = card(_("Saved computers"), _("Keep trusted computers and their connection settings. Share with one computer at a time."))
+        selection = box(False, 12)
+        self.peer_combo = Gtk.ComboBoxText()
+        self.peer_combo.set_hexpand(True)
+        for cell in self.peer_combo.get_cells():
+            cell.set_property('ellipsize', Pango.EllipsizeMode.END)
+            cell.set_property('max-width-chars', 32)
+        self.peer_combo.get_accessible().set_name(_("Saved computers"))
+        self.peer_combo.connect('changed', self.saved_peer_selected)
+        self.peer_switch = button(_("Switch to this computer"), self.switch_peer, icon='network-transmit-receive-symbolic')
+        selection.pack_start(self.peer_combo, True, True, 0)
+        selection.pack_end(self.peer_switch, False, False, 0)
+        saved.pack_start(selection, False, False, 0)
+        self.current_peer_label = text('', 'muted')
+        saved.pack_start(self.current_peer_label, False, False, 0)
+        self.peer_switch_hint = text('', 'muted')
+        saved.pack_start(self.peer_switch_hint, False, False, 0)
+        page.pack_start(saved, False, False, 0)
         self.cert_labels = {}
         panels = []
         for role, title in [('identity', _("This computer's pairing file")), ('peer', _("Paired computer"))]:
@@ -420,6 +440,7 @@ class Window(Gtk.ApplicationWindow):
 
     def editing_state(self):
         return {'page': self.stack.get_visible_child_name(), 'settings_dirty': self.settings_dirty,
+                'saved_peer': self.peer_combo.get_active_id(),
                 'settings_revision': self.settings_revision,
                 'settings': {'mode': self.connection_mode.get_active_id(), 'host': self.host_entry.get_text(),
                              'port': self.port_spin.get_value(), 'gestures': self.gesture_check.get_active(),
@@ -430,6 +451,8 @@ class Window(Gtk.ApplicationWindow):
 
     def restore_editing_state(self, state):
         self.updating = True
+        if state.get('saved_peer') in self.paired_devices:
+            self.peer_combo.set_active_id(state['saved_peer'])
         if state['settings_dirty']:
             values = state['settings']
             self.connection_mode.set_active_id(values['mode'])
@@ -446,6 +469,7 @@ class Window(Gtk.ApplicationWindow):
         if state['setup_output']:
             self.setup_output.set_active_id(state['setup_output'])
         self.updating = False
+        self.saved_peer_selected()
         if state['layout_dirty'] and state['layout']:
             self.editor.draft = state['layout']
             self.layout_dirty = True
@@ -526,6 +550,7 @@ class Window(Gtk.ApplicationWindow):
         if self.poll_pending:
             return True
         self.poll_pending = True
+        generation = self.poll_generation
         future = self.executor.submit(self.model.poll)
         def done(future):
             try:
@@ -534,7 +559,7 @@ class Window(Gtk.ApplicationWindow):
                 result = {'service': {}, 'status': None}
             def update():
                 self.poll_pending = False
-                if self.alive:
+                if self.alive and generation == self.poll_generation:
                     self.update_status(result)
                 return False
             GLib.idle_add(update)
@@ -546,6 +571,21 @@ class Window(Gtk.ApplicationWindow):
         self.version_label.set_text('NiriBridge ' + info.get('version', ''))
         config = info.get('config')
         self.updating = True
+        chosen = self.peer_combo.get_active_id()
+        devices = config.get('paired_devices', []) if config else []
+        self.paired_devices = {device['fingerprint']: device for device in devices}
+        self.peer_combo.remove_all()
+        active_fingerprint = None
+        for device in devices:
+            fingerprint = device['fingerprint']
+            label = f'{device["name"]} · {fingerprint[:12]}'
+            if device['active']:
+                label = _("{computer} (current)").format(computer=label)
+                active_fingerprint = fingerprint
+            self.peer_combo.append(fingerprint, label)
+        self.peer_combo.set_active_id(chosen if chosen in self.paired_devices else active_fingerprint)
+        current = self.paired_devices.get(active_fingerprint)
+        self.current_peer_label.set_text(_("Selected for sharing: {computer}").format(computer=current['name']) if current else _("No computer is selected. Import a pairing file to get started."))
         if config and not self.settings_dirty:
             self.settings_revision = config['revision']
             settings = config['settings']
@@ -590,6 +630,7 @@ class Window(Gtk.ApplicationWindow):
             fp.set_tooltip_text(_("Valid until ") + cert['expires'] if cert else None)
         self.connection_mode_changed()
         self.updating = False
+        self.saved_peer_selected()
         self.update_permissions()
         self.update_status(info)
         if not config:
@@ -721,6 +762,10 @@ class Window(Gtk.ApplicationWindow):
         self.preferences_save.set_sensitive(bool(config and self.settings_dirty and not self.busy and not unmanaged))
         self.export_button.set_sensitive(bool(config and config.get('identity') and not self.busy))
         self.import_button.set_sensitive(bool(config and not self.busy and not unmanaged))
+        peer_management = bool(config and not self.busy and not unmanaged and not configuring and status.get('reason') != 'config_changed')
+        chosen = self.paired_devices.get(self.peer_combo.get_active_id())
+        self.peer_combo.set_sensitive(peer_management and bool(self.paired_devices))
+        self.peer_switch.set_sensitive(bool(peer_management and chosen and not chosen['active']))
         self.permission_button.set_sensitive(bool(config and not self.busy and not unmanaged))
         self.autostart.set_sensitive(bool(config and not unmanaged and not self.busy and status.get('reason') != 'config_changed'))
         for combo in self.language_combos:
@@ -983,6 +1028,41 @@ class Window(Gtk.ApplicationWindow):
             self.work(_("Exporting the pairing file…"), export, lambda _unused: self.notice(_("Pairing file exported. Import it on the other computer and verify the fingerprint.")))
         self.choose_file(_("Export this computer's file"), True, selected, f'niri-bridge-{cert["name"]}.pem')
 
+    def saved_peer_selected(self, *_unused):
+        if self.updating:
+            return
+        chosen = self.paired_devices.get(self.peer_combo.get_active_id())
+        if not chosen:
+            hint = _("Import each computer's pairing file once. Saved computers remain available when you add another.")
+        elif chosen['active']:
+            hint = _("This computer is already selected. Adding another keeps this selection.")
+        else:
+            hint = _("Switching stops sharing and restores this computer's saved address and screen connections. Click Start sharing when ready.")
+        self.peer_switch_hint.set_text(hint)
+        self.peer_combo.set_tooltip_text(chosen['fingerprint'] if chosen else None)
+        self.update_controls()
+
+    def switch_peer(self, *_unused):
+        fingerprint = self.peer_combo.get_active_id()
+        chosen = self.paired_devices.get(fingerprint)
+        if self.busy or not chosen or chosen['active']:
+            return
+        if (self.settings_dirty or self.layout_dirty) and not self.confirm(
+                _("Discard unsaved changes?"),
+                _("Switching computers discards unsaved connection, input-device and screen edits. Saved settings are kept for each computer."),
+                _("Discard and switch")):
+            return
+        revision = self.info['config']['revision']
+        def done(_unused):
+            self.settings_dirty = self.layout_dirty = False
+            self.poll_generation += 1
+            self.layout_key = self.overview_key = None
+            self.editor.set_desktops(None, None)
+            self.editor.last_selection = None
+            self.overview_canvas.set_desktops(None, None)
+            self.reload_all(_("Selected {computer}. Sharing is stopped. Check the connection settings, then click Start sharing on both computers.").format(computer=chosen['name']))
+        self.work(_("Switching computers…"), lambda: self.model.select_peer(revision, fingerprint), done)
+
     def import_certificate(self, *_unused):
         def selected(path):
             self.work(_("Reading the pairing file…"), lambda: self.model.inspect_certificate(path), lambda info: self.review_peer(path, info))
@@ -1014,7 +1094,7 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if result == Gtk.ResponseType.ACCEPT and confirmed:
             revision = self.info['config']['revision']
-            self.work(_("Saving pairing information…"), lambda: self.model.import_peer(path, revision, certificate['fingerprint']), lambda _unused: self.reload_all(_("Pairing file imported. Make sure the other computer has imported your file, then start sharing.")))
+            self.work(_("Saving pairing information…"), lambda: self.model.import_peer(path, revision, certificate['fingerprint']), lambda _unused: self.reload_all(_("Computer saved. Earlier pairings are kept. Select each other on both computers before starting sharing.")))
 
     def copy_diagnostics(self, *_unused):
         def done(report):

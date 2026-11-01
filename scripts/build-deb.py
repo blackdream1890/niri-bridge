@@ -26,8 +26,8 @@ Type=Application
 Name=NiriBridge
 GenericName=Keyboard and pointer sharing
 GenericName[zh_CN]=键鼠共享
-Comment=Share keyboard, mouse and touchpad gestures across Niri desktops
-Comment[zh_CN]=跨 Niri 桌面共享键鼠与触摸板手势
+Comment=Share keyboard, mouse and touchpad gestures across Niri and KDE Plasma desktops
+Comment[zh_CN]=跨 Niri 和 KDE Plasma 桌面共享键鼠与触摸板手势
 Exec=/usr/bin/niri-bridge-ui
 Icon=niri-bridge
 Terminal=false
@@ -45,8 +45,9 @@ Architecture: amd64
 Maintainer: NiriBridge contributors <174260507+blackdream1890@users.noreply.github.com>
 Homepage: https://github.com/blackdream1890/niri-bridge
 Depends: libc6 (>= {metadata['minimum_glibc_symbol_version']}), libgcc-s1, libei1 (>= 1.0), python3 (>= 3.11), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, openssl, acl, pkexec, systemd, util-linux
-Description: Share keyboard, pointer and touchpad gestures between Niri desktops
- NiriBridge connects two Ubuntu 26.04 computers running Niri 26.04.
+Description: Share keyboard, pointer and touchpad gestures between Wayland desktops
+ NiriBridge connects Ubuntu 26.04 computers running Niri 26.04 or KDE Plasma 6.6 Wayland.
+ Save multiple paired computers and select one sharing target at a time.
  Open the application to set up pairing and choose Start sharing.
  Quitting from the tray stops sharing. Existing settings are retained.
 ''')

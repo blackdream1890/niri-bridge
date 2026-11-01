@@ -277,5 +277,22 @@
   "Approve pointer control in the desktop authorization dialog to connect.": "请在桌面授权窗口中允许控制鼠标，以便连接。",
   "Desktop input control is unavailable. Stop sharing, then start again and approve the desktop dialog.": "桌面输入控制不可用。请停止共享后重新启动，并在桌面授权窗口中确认。",
   "Unlock this computer and return to your desktop session to continue.": "解锁本机并返回桌面会话后继续。",
-  "Keyboard, mouse and native touchpad sharing for Niri and KDE Plasma Wayland.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later.": "面向 Niri 和 KDE Plasma Wayland 的键盘、鼠标与原生触摸板共享。\n本软件不提供任何担保。你可以按照 GNU GPL 第 3 版或后续版本使用、修改和再分发。"
+  "Keyboard, mouse and native touchpad sharing for Niri and KDE Plasma Wayland.\nThis software comes with no warranty. You may use, modify and redistribute it under the GNU GPL version 3 or later.": "面向 Niri 和 KDE Plasma Wayland 的键盘、鼠标与原生触摸板共享。\n本软件不提供任何担保。你可以按照 GNU GPL 第 3 版或后续版本使用、修改和再分发。",
+  "Computer saved. Earlier pairings are kept. Select each other on both computers before starting sharing.": "设备已保存，已有配对已保留。请在两台电脑互相选择对方，然后开始共享。",
+  "Discard and switch": "放弃修改并切换",
+  "Import each computer's pairing file once. Saved computers remain available when you add another.": "每台设备导入一次配对文件即可。添加新设备会保留已有配对。",
+  "Keep trusted computers and their connection settings. Share with one computer at a time.": "保留已信任设备及各自的连接设置。每次与一台设备共享。",
+  "No computer is selected. Import a pairing file to get started.": "尚未选择设备。请先导入配对文件。",
+  "Saved computers": "已配对设备",
+  "Selected for sharing: {computer}": "当前共享目标：{computer}",
+  "Selected {computer}. Sharing is stopped. Check the connection settings, then click Start sharing on both computers.": "已选择 {computer}，共享已停止。请核对连接设置，然后在两台电脑点击“开始共享”。",
+  "Stop sharing before switching computers, then try again.": "请先停止共享，再尝试切换设备。",
+  "Switch to this computer": "切换到此设备",
+  "Switching computers discards unsaved connection, input-device and screen edits. Saved settings are kept for each computer.": "切换设备会放弃尚未保存的连接、输入设备和屏幕修改。各设备已保存的设置会保留。",
+  "Switching computers…": "正在切换设备…",
+  "Switching stops sharing and restores this computer's saved address and screen connections. Click Start sharing when ready.": "切换会停止共享，并恢复此设备保存的地址和屏幕连接。准备好后点击“开始共享”。",
+  "This computer is already selected. Adding another keeps this selection.": "已选择此设备。添加其他设备不会切换当前目标。",
+  "This computer's saved pairing file is missing or changed. Import its pairing file again and verify the fingerprint.": "此设备保存的配对文件已丢失或发生变化。请重新导入其配对文件并核对指纹。",
+  "This saved computer is no longer available. Reload the device list and select it again.": "此设备的保存记录已不可用。请重新载入设备列表后再选择。",
+  "{computer} (current)": "{computer}（当前）"
 }

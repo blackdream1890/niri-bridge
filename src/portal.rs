@@ -3,15 +3,12 @@
 use anyhow::{Context, Result, ensure};
 use futures_util::StreamExt;
 use std::{collections::HashMap, os::fd::OwnedFd, time::Duration};
-use zbus::{
-    Connection, Proxy,
-    zvariant::{OwnedObjectPath, OwnedValue, Value},
-};
+use zbus::{Connection, OwnedObjectPath, OwnedVariant, Proxy, Variant};
 const DEST: &str = "org.freedesktop.portal.Desktop";
 const PATH: &str = "/org/freedesktop/portal/desktop";
 const REMOTE: &str = "org.freedesktop.portal.RemoteDesktop";
-type Options<'a> = HashMap<&'a str, Value<'a>>;
-type Results = HashMap<String, OwnedValue>;
+type Options<'a> = HashMap<&'a str, Variant<'a>>;
+type Results = HashMap<String, OwnedVariant>;
 
 pub struct Session {
     connection: Connection,
@@ -23,7 +20,7 @@ impl Session {
         let remote = Proxy::new(&connection, DEST, PATH, REMOTE).await?;
         let token = format!("niribridge_{}", std::process::id());
         let mut options = Options::new();
-        options.insert("session_handle_token", Value::from(token.as_str()));
+        options.insert("session_handle_token", Variant::from(token.as_str()));
         let results = request(
             &connection,
             &remote,
@@ -42,7 +39,7 @@ impl Session {
             path,
         };
         let mut options = Options::new();
-        options.insert("types", Value::from(2u32));
+        options.insert("types", Variant::from(2u32));
         request(
             &connection,
             &remote,
@@ -66,7 +63,7 @@ impl Session {
             .and_then(|v| u32::try_from(v).ok())
             .unwrap_or(0);
         ensure!(granted & 2 != 0, "Desktop pointer control was not granted");
-        let fd: zbus::zvariant::OwnedFd = tokio::time::timeout(
+        let fd: zbus::OwnedFd = tokio::time::timeout(
             Duration::from_secs(5),
             remote.call("ConnectToEIS", &(&session.path, Options::new())),
         )
@@ -118,7 +115,7 @@ async fn request(
     )
     .await?;
     let mut responses = request.receive_signal("Response").await?;
-    options.insert("handle_token", Value::from(token.clone()));
+    options.insert("handle_token", Variant::from(token.clone()));
     let result = tokio::time::timeout(Duration::from_secs(120), async {
         let returned: OwnedObjectPath = match session {
             None => remote.call(method, &(options,)).await?,

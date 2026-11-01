@@ -691,7 +691,11 @@ impl Router {
                     >= 0,
                 "Cannot select the touchpad input clock"
             );
-            let readiness = AsyncFd::new(device.as_fd().try_clone_to_owned()?)?;
+            let fd = device.as_fd().try_clone_to_owned()?;
+            // SAFETY: AsyncFd owns this duplicated descriptor. It stays open and
+            // unchanged until AsyncFd deregisters it; no code extracts, closes
+            // or replaces it. The evdev Device owns a separate descriptor.
+            let readiness = unsafe { AsyncFd::register(fd) }?;
             let mirror = VirtualTouchpad::create(&descriptor)?;
             let state = TouchState::new(&descriptor);
             pads.push(PhysicalTouchpad {

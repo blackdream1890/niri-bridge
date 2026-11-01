@@ -6,15 +6,20 @@ Keep your keyboard and touchpad gestures with your pointer across Niri and KDE P
 
 NiriBridge shares keyboard, mouse and touchpad input between two Ubuntu Wayland computers running Niri or KDE Plasma. Each computer renders its own desktop. Move the pointer through a configured screen edge and the keyboard follows automatically; three-finger workspace switching and four-finger overview gestures follow the same destination.
 
+**The 1.0 release candidate remembers multiple paired computers.** Each keeps its
+certificate, fingerprint, address and screen connections. Choose one sharing
+target in Devices & pairing; switching stops sharing until you explicitly start
+it again. Adding a computer preserves earlier pairings and the current selection.
+
 **Version 0.3 adds automatic Niri/KDE Plasma detection and a user-authorized libei pointer backend for KDE.** Keyboard and native touchpad input retain the uinput path. KDE gestures follow KDE’s own bindings; they are not remapped to Niri actions. KDE X11 is not supported.
 
 **Version 0.2 adds a native desktop interface** with live connection status, Start/Stop sharing controls, pairing, screen arrangement and input preferences. English is the default interface language, with a complete Simplified Chinese catalog. The language follows your desktop by default and can be changed in Preferences without restarting input sharing or losing unsaved edits.
 
-This is an early beta for Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
+This checkout is the 1.0 release candidate for Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland. Physical saved-device switching acceptance is pending. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
 
 ## Desktop interface
 
-Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-0.3.0-beta.3-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
+Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-1.0.0-rc.1-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
 
 The portable x86_64 archive remains available. After installing the [runtime dependencies](docs/setup.md), extract it and run as your desktop user:
 
@@ -35,7 +40,7 @@ The interface provides:
 
 - **Overview:** authenticated connection state, the current control target and measured connection round-trip time.
 - **Screen connections:** add multiple pairs of entry edges, select each pair's displays and ranges, or drag the other computer's screen group to adjust the selected connection. Saving synchronizes all connections over the existing encrypted link.
-- **Devices & pairing:** export the local public pairing file, inspect the other computer's file and verify its fingerprint before trusting it.
+- **Devices & pairing:** save multiple trusted computers, switch the selected sharing target, export the local public pairing file and review new certificate fingerprints.
 - **Preferences:** choose physical input devices, enable native touchpad gestures, manage automatic startup and select the interface language.
 - **System tray:** open the interface, start/stop sharing or quit NiriBridge. Closing the window hides it in the tray; quitting from the tray stops sharing.
 
@@ -50,6 +55,13 @@ The UI manages the standard `niri-bridge.service` user service. The login prefer
 5. In **Screen connections**, drag the other computer into position, choose the entry displays and save. Both sides validate their current configuration before applying the change.
 
 Screen connections configure the crossing between computers. The monitor arrangement within each computer continues to follow its desktop configuration.
+
+To add another computer, import its pairing file and verify its fingerprint.
+Earlier computers remain in **Saved computers**. Choose a computer and click
+**Switch to this computer** to restore its saved settings, then select each other
+and click **Start sharing** on both computers. A newly added computer starts with
+its own connection settings; configure its address and screen connections before
+use. Saved computers cannot control input unless they are selected.
 
 The complete [installation and operating guide](docs/setup.md) covers dependencies, device access, firewall rules and recovery.
 

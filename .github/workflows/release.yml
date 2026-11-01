@@ -115,7 +115,9 @@ jobs:
             exit 1
           fi
           cat > release-notes.md <<'NOTES'
-          Early beta for Ubuntu 26.04, Niri 26.04 or KDE Plasma 6.6 Wayland, and Linux x86_64.
+          Keyboard, pointer and touchpad sharing for Ubuntu 26.04, Niri 26.04 or KDE Plasma 6.6 Wayland, and Linux x86_64.
+
+          Save multiple paired computers with their own certificates, addresses and screen connections. Adding a computer preserves earlier pairings. Switching the selected computer stops sharing until you explicitly start it again; both endpoints must select each other.
 
           The desktop backend is detected automatically. KDE requests pointer-control consent when sharing starts; no screen video or clipboard access is requested. KDE X11 is unsupported.
 

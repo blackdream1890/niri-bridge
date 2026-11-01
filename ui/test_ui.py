@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -29,9 +30,12 @@ def fixture():
     certificate = {'name': 'laptop', 'fingerprint': '0123456789abcdef' * 4, 'expires': '2027-09-08', 'pem': 'public-certificate-fixture'}
     config = {'revision': 'a' * 64, 'edges': [edge_a], 'peer_name': 'desktop',
               'identity': certificate, 'peer': dict(certificate, name='desktop', fingerprint='fedcba9876543210' * 4),
+              'paired_devices': [
+                  {'name': 'desktop', 'fingerprint': 'fedcba9876543210' * 4, 'expires': '2027-09-08', 'active': True},
+                  {'name': 'office', 'fingerprint': '1234567890abcdef' * 4, 'expires': '2027-09-08', 'active': False}],
               'settings': {'connection': {'mode': 'connect', 'address': 'desktop.local:42420'},
                            'activity_devices': ['/dev/input/by-path/test-keyboard', '/dev/input/by-path/test-touchpad'], 'native_touchpads': True}}
-    return {'version': '0.3.0-beta.3', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
+    return {'version': '1.0.0-rc.1', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
             'status': {'connection': 'connected', 'role': 'local', 'local_unlocked': True, 'peer_unlocked': True,
                        'peer_name': 'desktop', 'latency_ms': 1.6, 'local': local, 'peer': peer, 'configuring': False},
             'devices': {'uinput_writable': True, 'devices': [
@@ -232,6 +236,199 @@ class FileChooserTests(unittest.TestCase):
         self.assertIsNone(self.window.file_chooser)
         dialog.emit('response', Gtk.ResponseType.ACCEPT)
         self.assertFalse(destination.exists())
+
+
+class SavedDeviceModelTests(unittest.TestCase):
+    def setUp(self):
+        self.model = Model(config=Path('/synthetic/config.toml'), binary='/synthetic/niri-bridge')
+        self.model.ensure_managed = mock.Mock()
+        self.model.controls_current_config = mock.Mock(return_value=True)
+        self.model.set_running = mock.Mock()
+        self.model.manage = mock.Mock(return_value={'revision': 'b' * 64})
+
+    def test_switch_stops_before_writing_and_does_not_restart(self):
+        actions = []
+        self.model.set_running.side_effect = lambda running: actions.append(('running', running))
+        self.model.manage.side_effect = lambda *args: actions.append(('manage', *args)) or {}
+        self.model.select_peer('a' * 64, 'c' * 64)
+        self.assertEqual(actions, [
+            ('running', False),
+            ('manage', 'select-peer', '--config', self.model.config,
+             '--revision', 'a' * 64, '--fingerprint', 'c' * 64)])
+
+    def test_failed_stop_preserves_pairing_without_management_write(self):
+        self.model.set_running.side_effect = OperationError('stop_failed')
+        with self.assertRaises(OperationError):
+            self.model.select_peer('a' * 64, 'c' * 64)
+        self.model.manage.assert_not_called()
+        self.model.set_running.assert_called_once_with(False)
+
+    def test_failed_switch_leaves_sharing_stopped(self):
+        self.model.manage.side_effect = OperationError('settings_conflict')
+        with self.assertRaises(OperationError) as error:
+            self.model.select_peer('a' * 64, 'c' * 64)
+        self.assertEqual(error.exception.code, 'settings_conflict')
+        self.model.set_running.assert_called_once_with(False)
+
+    def test_manual_instance_and_different_config_block_all_pairing_writes(self):
+        for code in ('manual_instance', 'config_changed'):
+            for operation in (
+                    lambda: self.model.select_peer('a' * 64, 'c' * 64),
+                    lambda: self.model.import_peer(Path('/synthetic/peer.pem'), 'a' * 64, 'c' * 64),
+                    lambda: self.model.save_settings('a' * 64, {})):
+                with self.subTest(code=code):
+                    self.model.ensure_managed.side_effect = OperationError(code) if code == 'manual_instance' else None
+                    self.model.controls_current_config.return_value = code != 'config_changed'
+                    with self.assertRaises(OperationError) as error:
+                        operation()
+                    self.assertEqual(error.exception.code, code)
+        self.model.set_running.assert_not_called()
+        self.model.manage.assert_not_called()
+
+
+class SavedDeviceWidgetTests(unittest.TestCase):
+    def setUp(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest('A GTK display is required')
+        self.model = FakeModel()
+        self.model.data['config']['paired_devices'][1]['name'] = 'desktop'
+        self.model.select_peer = mock.Mock(return_value={})
+        with mock.patch('app.Window.setup_tray'):
+            self.window = Window(None, self.model)
+        pump(lambda: self.window.info is not None and not self.window.busy)
+        self.window.navigate('pair')
+        self.other = self.model.data['config']['paired_devices'][1]['fingerprint']
+
+    def tearDown(self):
+        self.window.destroy()
+        self.model.directory.cleanup()
+
+    def test_browsing_same_name_devices_is_distinct_and_has_no_backend_effect(self):
+        window = self.window
+        active = window.peer_combo.get_active_id()
+        self.assertFalse(window.peer_switch.get_sensitive())
+        window.peer_combo.set_active_id(self.other)
+        self.assertTrue(window.peer_switch.get_sensitive())
+        labels = [row[0] for row in window.peer_combo.get_model()]
+        self.assertEqual(len(set(labels)), 2)
+        self.assertTrue(all('desktop' in label for label in labels))
+        self.assertIn(self.other[:12], window.peer_combo.get_active_text())
+        self.assertIn(self.other, window.peer_combo.get_tooltip_text())
+        self.model.select_peer.assert_not_called()
+        self.assertEqual(self.model.actions, [])
+        window.peer_combo.set_active_id(active)
+        window.switch_peer()
+        self.model.select_peer.assert_not_called()
+
+    def test_cancelled_switch_preserves_unsaved_settings_and_layout(self):
+        window = self.window
+        window.host_entry.set_text('unsaved.local')
+        window.layout_dirty = True
+        draft = window.editor.draft
+        window.peer_combo.set_active_id(self.other)
+        with mock.patch.object(window, 'confirm', return_value=False) as confirm:
+            window.peer_switch.emit('clicked')
+        confirm.assert_called_once()
+        self.model.select_peer.assert_not_called()
+        self.assertTrue(window.settings_dirty)
+        self.assertTrue(window.layout_dirty)
+        self.assertIs(window.editor.draft, draft)
+        self.assertEqual(window.host_entry.get_text(), 'unsaved.local')
+        self.assertEqual(self.model.actions, [])
+
+    def test_successful_switch_discards_confirmed_drafts_and_loads_the_new_target(self):
+        window = self.window
+        window.host_entry.set_text('unsaved.local')
+        window.layout_dirty = True
+        window.peer_combo.set_active_id(self.other)
+        def switched(_revision, fingerprint):
+            config = self.model.data['config']
+            for device in config['paired_devices']:
+                device['active'] = device['fingerprint'] == fingerprint
+            config['peer']['fingerprint'] = fingerprint
+            config['settings']['connection']['address'] = 'office.local:42421'
+            self.model.data['service']['ActiveState'] = 'inactive'
+            self.model.data['status'] = None
+        self.model.select_peer.side_effect = switched
+        with mock.patch.object(window, 'confirm', return_value=True):
+            window.peer_switch.emit('clicked')
+            pump(lambda: not window.busy)
+        self.model.select_peer.assert_called_once_with('a' * 64, self.other)
+        self.assertFalse(window.settings_dirty)
+        self.assertFalse(window.layout_dirty)
+        self.assertIsNone(window.editor.draft)
+        self.assertEqual(window.host_entry.get_text(), 'office.local')
+        self.assertEqual(window.port_spin.get_value_as_int(), 42421)
+        self.assertFalse(window.peer_switch.get_sensitive())
+        self.assertEqual(window.toggle_button.get_label(), _('Start sharing'))
+
+    def test_failed_switch_keeps_drafts_and_original_target(self):
+        window = self.window
+        original = window.info['config']['peer']['fingerprint']
+        window.host_entry.set_text('unsaved.local')
+        window.layout_dirty = True
+        draft = window.editor.draft
+        window.peer_combo.set_active_id(self.other)
+        self.model.select_peer.side_effect = OperationError('settings_conflict')
+        with mock.patch.object(window, 'confirm', return_value=True):
+            window.peer_switch.emit('clicked')
+            pump(lambda: not window.busy)
+        self.assertEqual(window.info['config']['peer']['fingerprint'], original)
+        self.assertTrue(window.settings_dirty)
+        self.assertTrue(window.layout_dirty)
+        self.assertIs(window.editor.draft, draft)
+        self.assertEqual(window.host_entry.get_text(), 'unsaved.local')
+        self.assertEqual(self.model.actions, [])
+
+    def test_browsed_device_and_drafts_survive_language_rebuild_state(self):
+        window = self.window
+        window.peer_combo.set_active_id(self.other)
+        window.host_entry.set_text('unsaved.local')
+        state = window.editing_state()
+        with mock.patch('app.Window.setup_tray'):
+            restored = Window(None, self.model, restore_state=state)
+        try:
+            pump(lambda: restored.info is not None and not restored.busy)
+            self.assertEqual(restored.peer_combo.get_active_id(), self.other)
+            self.assertEqual(restored.host_entry.get_text(), 'unsaved.local')
+            self.assertTrue(restored.settings_dirty)
+            self.model.select_peer.assert_not_called()
+        finally:
+            restored.destroy()
+
+    def test_old_in_flight_poll_cannot_restore_the_previous_computers_layout(self):
+        window = self.window
+        old_status = self.model.poll()
+        normal_poll = self.model.poll
+        started, release = threading.Event(), threading.Event()
+        def delayed_poll():
+            if not started.is_set():
+                started.set()
+                release.wait(3)
+                return old_status
+            return normal_poll()
+        def switched(_revision, fingerprint):
+            config = self.model.data['config']
+            for device in config['paired_devices']:
+                device['active'] = device['fingerprint'] == fingerprint
+            config['peer']['fingerprint'] = fingerprint
+            self.model.data['service']['ActiveState'] = 'inactive'
+            self.model.data['status'] = None
+        self.model.select_peer.side_effect = switched
+        with mock.patch.object(self.model, 'poll', side_effect=delayed_poll):
+            try:
+                window.poll()
+                pump(started.is_set)
+                window.peer_combo.set_active_id(self.other)
+                window.peer_switch.emit('clicked')
+                pump(lambda: not window.busy)
+            finally:
+                release.set()
+            pump(lambda: not window.poll_pending)
+        self.assertEqual(window.info['config']['peer']['fingerprint'], self.other)
+        self.assertIsNone(window.poll_data['status'])
+        self.assertIsNone(window.editor.draft)
+        self.assertEqual(window.toggle_button.get_label(), _('Start sharing'))
         self.assertEqual(self.model.actions, [])
 
 

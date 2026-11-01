@@ -68,32 +68,6 @@
     },
     {
       "declared_license": "MIT OR Apache-2.0",
-      "name": "async-broadcast",
-      "notices": [
-        "Apache-2.0-6b286a8c17b82bbc.txt"
-      ],
-      "repository": "https://github.com/smol-rs/async-broadcast",
-      "upstream_notices": [
-        "upstream/async-broadcast-0.7.2/LICENSE-APACHE",
-        "upstream/async-broadcast-0.7.2/LICENSE-MIT"
-      ],
-      "version": "0.7.2"
-    },
-    {
-      "declared_license": "MIT OR Apache-2.0",
-      "name": "async-recursion",
-      "notices": [
-        "Apache-2.0-143368af9701a24e.txt"
-      ],
-      "repository": "https://github.com/dcchut/async-recursion",
-      "upstream_notices": [
-        "upstream/async-recursion-1.1.1/LICENSE-APACHE",
-        "upstream/async-recursion-1.1.1/LICENSE-MIT"
-      ],
-      "version": "1.1.1"
-    },
-    {
-      "declared_license": "MIT OR Apache-2.0",
       "name": "async-trait",
       "notices": [
         "Apache-2.0-074e6e32c86a4c0e.txt"
@@ -126,10 +100,10 @@
       ],
       "repository": "https://github.com/bitflags/bitflags",
       "upstream_notices": [
-        "upstream/bitflags-2.13.1/LICENSE-APACHE",
-        "upstream/bitflags-2.13.1/LICENSE-MIT"
+        "upstream/bitflags-2.13.2/LICENSE-APACHE",
+        "upstream/bitflags-2.13.2/LICENSE-MIT"
       ],
-      "version": "2.13.1"
+      "version": "2.13.2"
     },
     {
       "declared_license": "MIT",
@@ -299,32 +273,6 @@
       "version": "1.1.1"
     },
     {
-      "declared_license": "MIT OR Apache-2.0",
-      "name": "enumflags2",
-      "notices": [
-        "Apache-2.0-41ba8a366e4129d0.txt"
-      ],
-      "repository": "https://github.com/meithecatte/enumflags2",
-      "upstream_notices": [
-        "upstream/enumflags2-0.7.12/LICENSE-APACHE",
-        "upstream/enumflags2-0.7.12/LICENSE-MIT"
-      ],
-      "version": "0.7.12"
-    },
-    {
-      "declared_license": "MIT OR Apache-2.0",
-      "name": "enumflags2_derive",
-      "notices": [
-        "Apache-2.0-68d7c3ae5b131ec5.txt"
-      ],
-      "repository": "https://github.com/meithecatte/enumflags2",
-      "upstream_notices": [
-        "upstream/enumflags2_derive-0.7.12/LICENSE-APACHE",
-        "upstream/enumflags2_derive-0.7.12/LICENSE-MIT"
-      ],
-      "version": "0.7.12"
-    },
-    {
       "declared_license": "Apache-2.0 OR MIT",
       "name": "equivalent",
       "notices": [
@@ -362,32 +310,6 @@
         "upstream/evdev-0.13.2/LICENSE-MIT"
       ],
       "version": "0.13.2"
-    },
-    {
-      "declared_license": "Apache-2.0 OR MIT",
-      "name": "event-listener",
-      "notices": [
-        "Apache-2.0-143368af9701a24e.txt"
-      ],
-      "repository": "https://github.com/smol-rs/event-listener",
-      "upstream_notices": [
-        "upstream/event-listener-5.4.2/LICENSE-APACHE",
-        "upstream/event-listener-5.4.2/LICENSE-MIT"
-      ],
-      "version": "5.4.2"
-    },
-    {
-      "declared_license": "Apache-2.0 OR MIT",
-      "name": "event-listener-strategy",
-      "notices": [
-        "Apache-2.0-143368af9701a24e.txt"
-      ],
-      "repository": "https://github.com/smol-rs/event-listener-strategy",
-      "upstream_notices": [
-        "upstream/event-listener-strategy-0.5.4/LICENSE-APACHE",
-        "upstream/event-listener-strategy-0.5.4/LICENSE-MIT"
-      ],
-      "version": "0.5.4"
     },
     {
       "declared_license": "Apache-2.0 OR MIT",
@@ -452,20 +374,6 @@
         "upstream/futures-io-0.3.34/LICENSE-MIT"
       ],
       "version": "0.3.34"
-    },
-    {
-      "declared_license": "Apache-2.0 OR MIT",
-      "name": "futures-lite",
-      "notices": [
-        "Apache-2.0-143368af9701a24e.txt"
-      ],
-      "repository": "https://github.com/smol-rs/futures-lite",
-      "upstream_notices": [
-        "upstream/futures-lite-2.6.1/LICENSE-APACHE",
-        "upstream/futures-lite-2.6.1/LICENSE-MIT",
-        "upstream/futures-lite-2.6.1/LICENSE-THIRD-PARTY"
-      ],
-      "version": "2.6.1"
     },
     {
       "declared_license": "MIT OR Apache-2.0",
@@ -716,20 +624,6 @@
       "version": "0.2.0"
     },
     {
-      "declared_license": "Apache-2.0 OR MIT",
-      "name": "parking",
-      "notices": [
-        "Apache-2.0-143368af9701a24e.txt"
-      ],
-      "repository": "https://github.com/smol-rs/parking",
-      "upstream_notices": [
-        "upstream/parking-2.2.1/LICENSE-APACHE",
-        "upstream/parking-2.2.1/LICENSE-MIT",
-        "upstream/parking-2.2.1/LICENSE-THIRD-PARTY"
-      ],
-      "version": "2.2.1"
-    },
-    {
       "declared_license": "MIT",
       "name": "pem",
       "notices": [
@@ -779,19 +673,6 @@
         "upstream/powerfmt-0.2.0/LICENSE-MIT"
       ],
       "version": "0.2.0"
-    },
-    {
-      "declared_license": "MIT OR Apache-2.0",
-      "name": "proc-macro-crate",
-      "notices": [
-        "Apache-2.0-56a24963c5251611.txt"
-      ],
-      "repository": "https://github.com/bkchr/proc-macro-crate",
-      "upstream_notices": [
-        "upstream/proc-macro-crate-3.5.0/LICENSE-APACHE",
-        "upstream/proc-macro-crate-3.5.0/LICENSE-MIT"
-      ],
-      "version": "3.5.0"
     },
     {
       "declared_license": "MIT OR Apache-2.0",
@@ -913,11 +794,11 @@
       ],
       "repository": "https://github.com/rustls/rustls",
       "upstream_notices": [
-        "upstream/rustls-0.23.45/LICENSE-APACHE",
-        "upstream/rustls-0.23.45/LICENSE-ISC",
-        "upstream/rustls-0.23.45/LICENSE-MIT"
+        "upstream/rustls-0.23.46/LICENSE-APACHE",
+        "upstream/rustls-0.23.46/LICENSE-ISC",
+        "upstream/rustls-0.23.46/LICENSE-MIT"
       ],
-      "version": "0.23.45"
+      "version": "0.23.46"
     },
     {
       "declared_license": "MIT OR Apache-2.0",
@@ -940,9 +821,9 @@
       ],
       "repository": "https://github.com/rustls/webpki",
       "upstream_notices": [
-        "upstream/rustls-webpki-0.103.15/LICENSE"
+        "upstream/rustls-webpki-0.103.16/LICENSE"
       ],
-      "version": "0.103.15"
+      "version": "0.103.16"
     },
     {
       "declared_license": "MIT OR Apache-2.0",
@@ -1118,19 +999,6 @@
       ],
       "repository": "https://github.com/dtolnay/syn",
       "upstream_notices": [
-        "upstream/syn-2.0.119/LICENSE-APACHE",
-        "upstream/syn-2.0.119/LICENSE-MIT"
-      ],
-      "version": "2.0.119"
-    },
-    {
-      "declared_license": "MIT OR Apache-2.0",
-      "name": "syn",
-      "notices": [
-        "Apache-2.0-074e6e32c86a4c0e.txt"
-      ],
-      "repository": "https://github.com/dtolnay/syn",
-      "upstream_notices": [
         "upstream/syn-3.0.5/LICENSE-APACHE",
         "upstream/syn-3.0.5/LICENSE-MIT"
       ],
@@ -1195,9 +1063,9 @@
       ],
       "repository": "https://github.com/tokio-rs/tokio",
       "upstream_notices": [
-        "upstream/tokio-1.53.1/LICENSE"
+        "upstream/tokio-1.53.3/LICENSE"
       ],
-      "version": "1.53.1"
+      "version": "1.53.3"
     },
     {
       "declared_license": "MIT",
@@ -1301,44 +1169,6 @@
         "upstream/toml_writer-1.1.2+spec-1.1.0/LICENSE-MIT"
       ],
       "version": "1.1.2+spec-1.1.0"
-    },
-    {
-      "declared_license": "MIT",
-      "name": "tracing",
-      "notices": [
-        "MIT-898b1ae9821e98da.txt"
-      ],
-      "repository": "https://github.com/tokio-rs/tracing",
-      "upstream_notices": [
-        "upstream/tracing-0.1.44/LICENSE"
-      ],
-      "version": "0.1.44"
-    },
-    {
-      "declared_license": "MIT",
-      "name": "tracing-attributes",
-      "notices": [
-        "MIT-898b1ae9821e98da.txt"
-      ],
-      "repository": "https://github.com/tokio-rs/tracing",
-      "upstream_notices": [
-        "upstream/tracing-attributes-0.1.31/LICENSE"
-      ],
-      "version": "0.1.31"
-    },
-    {
-      "declared_license": "MIT",
-      "name": "tracing-core",
-      "notices": [
-        "MIT-58545fed1565e42d.txt",
-        "MIT-898b1ae9821e98da.txt"
-      ],
-      "repository": "https://github.com/tokio-rs/tracing",
-      "upstream_notices": [
-        "upstream/tracing-core-0.1.36/LICENSE",
-        "upstream/tracing-core-0.1.36/src/spin/LICENSE"
-      ],
-      "version": "0.1.36"
     },
     {
       "declared_license": "(MIT OR Apache-2.0) AND Unicode-3.0",
@@ -1524,9 +1354,9 @@
       ],
       "repository": "https://github.com/z-galaxy/zbus/",
       "upstream_notices": [
-        "upstream/zbus-5.19.0/LICENSE"
+        "upstream/zbus-6.2.0/LICENSE"
       ],
-      "version": "5.19.0"
+      "version": "6.2.0"
     },
     {
       "declared_license": "MIT",
@@ -1536,21 +1366,21 @@
       ],
       "repository": "https://github.com/z-galaxy/zbus/",
       "upstream_notices": [
-        "upstream/zbus_macros-5.19.0/LICENSE"
+        "upstream/zbus_macros-6.2.0/LICENSE"
       ],
-      "version": "5.19.0"
+      "version": "6.2.0"
     },
     {
       "declared_license": "MIT",
-      "name": "zbus_names",
+      "name": "zbus_utils",
       "notices": [
         "MIT-260e4ff3fc493695.txt"
       ],
       "repository": "https://github.com/z-galaxy/zbus/",
       "upstream_notices": [
-        "upstream/zbus_names-4.3.4/LICENSE"
+        "upstream/zbus_utils-6.1.0/LICENSE"
       ],
-      "version": "4.3.4"
+      "version": "6.1.0"
     },
     {
       "declared_license": "MIT",
@@ -1591,39 +1421,15 @@
     },
     {
       "declared_license": "MIT",
-      "name": "zvariant",
+      "name": "zruntime",
       "notices": [
-        "MIT-260e4ff3fc493695.txt"
+        "MIT-ec2e030f7cd75edb.txt"
       ],
-      "repository": "https://github.com/z-galaxy/zbus/",
+      "repository": "https://github.com/z-galaxy/zruntime",
       "upstream_notices": [
-        "upstream/zvariant-5.15.0/LICENSE"
+        "upstream/zruntime-0.2.2/LICENSE"
       ],
-      "version": "5.15.0"
-    },
-    {
-      "declared_license": "MIT",
-      "name": "zvariant_derive",
-      "notices": [
-        "MIT-260e4ff3fc493695.txt"
-      ],
-      "repository": "https://github.com/z-galaxy/zbus/",
-      "upstream_notices": [
-        "upstream/zvariant_derive-5.15.0/LICENSE"
-      ],
-      "version": "5.15.0"
-    },
-    {
-      "declared_license": "MIT",
-      "name": "zvariant_utils",
-      "notices": [
-        "MIT-23f18e03dc49df91.txt"
-      ],
-      "repository": "https://github.com/z-galaxy/zbus/",
-      "upstream_notices": [
-        "upstream/zvariant_utils-4.2.0/LICENSE"
-      ],
-      "version": "4.2.0"
+      "version": "0.2.2"
     }
   ],
   "target": "x86_64-unknown-linux-gnu"

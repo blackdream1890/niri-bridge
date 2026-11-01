@@ -13,7 +13,7 @@ The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tr
 For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
 
 ```sh
-sudo apt install ./niri-bridge-0.3.0-beta.3-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-1.0.0-rc.1-ubuntu26.04-amd64.deb
 ```
 
 Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.
@@ -84,7 +84,39 @@ In **Devices & pairing**:
 
 An imported file is checked again against the reviewed fingerprint before it is saved. Private-key files and the local computer's own certificate are rejected. Only public certificates are exported.
 
-The underlying files are `identity.pem`, `identity.key.pem` and `peer.pem` in `~/.config/niri-bridge`. The directory is private to its owner; the private key has mode 0600. Current generated certificates last one year and should be renewed and re-paired before expiry.
+The local identity files are `identity.pem` and `identity.key.pem` in
+`~/.config/niri-bridge`. Saved public certificates live in its private `peers/`
+directory, with fingerprint-derived filenames. The selected computer and each
+computer's connection and local screen settings are kept in `config.toml`.
+Existing `peer.pem` pairings remain readable and are retained on migration. The
+directory is private to its owner; private keys and saved certificates have mode
+0600. Current generated certificates last one year and should be renewed and
+re-paired before expiry.
+
+### Switch between saved computers
+
+Import a pairing file for each computer and compare its full SHA-256 fingerprint
+before confirming trust. Adding another computer retains earlier pairings and
+keeps the current selection. Importing the same certificate again preserves its
+address and screen connections. Computers with equal names and different
+certificates remain separate; their short fingerprints distinguish the list entries.
+
+Select a computer under **Saved computers**, then click **Switch to this computer**.
+Browsing the list alone has no effect. Switching stops sharing, restores that
+computer's saved connection and screen settings, and leaves sharing stopped.
+Save or explicitly discard unsaved edits before switching. Select each other on
+both computers, check the connection settings and click **Start sharing** when ready.
+New computers initially wait on the standard port with a single local entry;
+configure their address and screen connections independently.
+
+Only the selected certificate is trusted by the input transport. Other saved
+computers cannot connect until selected. A missing or changed saved certificate
+blocks selection or connection; re-import the original public certificate and
+verify the fingerprint to restore it. Never share or recreate the local private
+key merely to add a computer.
+
+Older binaries cannot read the new saved-device configuration. For rollback, use
+the pre-upgrade configuration backup and the retained original pairing files.
 
 ## Connection and input permissions
 
@@ -177,7 +209,7 @@ The installer preserves externally changed rules. It restores saved ACLs only fo
 - Linux keyboard codes 1–255 are supported; higher-numbered keys are not yet supported.
 - Native slot-based touchpads and three/four-finger gestures are validated on the initial hardware. Pinch combinations, cross-computer dragging and long suspend recovery need broader testing.
 - The first topology is two Niri computers. Other compositors, platforms and multi-computer graphs are not yet validated.
-- Certificate renewal is not automated. This release is an early beta under GPL-3.0-or-later.
+- Certificate renewal is not automated. This checkout is a 1.0 release candidate under GPL-3.0-or-later; see the saved-device acceptance checklist.
 
 ## Upgrade and uninstall
 

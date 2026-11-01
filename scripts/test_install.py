@@ -64,27 +64,40 @@ class InstallationTests(unittest.TestCase):
         with mock.patch('sys.argv', ['uninstall.py', '--prefix', str(self.prefix), *arguments]):
             uninstall.main()
 
-    def test_install_upgrade_and_uninstall_preserve_identity_and_configuration(self):
+    def test_install_upgrade_and_uninstall_preserve_identity_and_saved_devices(self):
         config = self.user / '.config/niri-bridge/config.toml'
         config.parent.mkdir(parents=True)
-        config.write_text('user-owned configuration')
+        config.write_text('user-owned configuration with multiple saved device profiles')
         identity = config.parent / 'identity.key.pem'
         identity.write_text('synthetic private fixture; not a usable key')
+        peers = config.parent / 'peers'
+        peers.mkdir(mode=0o700)
+        for name in ('desktop', 'studio'):
+            (peers / (name + '.pem')).write_text('synthetic public certificate for ' + name)
+            (peers / (name + '.pem')).chmod(0o600)
+        retained = {path: (path.read_bytes(), path.stat().st_mode & 0o777)
+                    for path in config.parent.rglob('*') if path.is_file()}
+        def check_retained():
+            self.assertEqual(peers.stat().st_mode & 0o777, 0o700)
+            for path, (content, mode) in retained.items():
+                self.assertTrue(path.read_bytes() == content, 'Saved pairing data was changed')
+                self.assertEqual(path.stat().st_mode & 0o777, mode)
         self.install()
+        check_retained()
         manifest = self.prefix / install.MANIFEST
         self.assertEqual(manifest.stat().st_mode & 0o777, 0o600)
         self.assertTrue(self.unit.is_file())
         self.assertFalse(any('enable' in call for call in self.calls))
         (self.source / 'bin/niri-bridge').write_text('# newer synthetic backend\n')
         self.install()
+        check_retained()
         self.assertEqual((self.prefix / 'bin/niri-bridge').read_text(), '# newer synthetic backend\n')
         self.remove('--dry-run')
         self.assertTrue((self.prefix / 'bin/niri-bridge').exists())
         self.remove()
         self.assertFalse((self.prefix / 'bin/niri-bridge').exists())
         self.assertFalse(self.unit.exists())
-        self.assertEqual(config.read_text(), 'user-owned configuration')
-        self.assertEqual(identity.read_text(), 'synthetic private fixture; not a usable key')
+        check_retained()
         self.assertFalse(any(call[0] == 'pkexec' for call in self.calls))
 
     def test_custom_service_and_edited_application_file_survive_removal(self):
@@ -133,12 +146,17 @@ class InstallationTests(unittest.TestCase):
         config.parent.mkdir(parents=True)
         config.write_text('user settings')
         (config.parent / 'identity.key.pem').write_text('synthetic secret fixture')
+        peers = config.parent / 'peers'
+        peers.mkdir(mode=0o700)
+        certificate = peers / 'desktop.pem'
+        certificate.write_text('synthetic retained public certificate')
         self.install()
         backup = next((self.user / '.local/state/niri-bridge/backups').iterdir())
         self.assertEqual(backup.stat().st_mode & 0o777, 0o700)
         self.assertEqual((backup / 'application/share/niri-bridge/ui/model.py').read_text(), '# local edit to retain')
         self.assertEqual((backup / 'config.toml').read_text(), 'user settings')
         self.assertFalse(list(backup.rglob('*.pem')))
+        self.assertEqual(certificate.read_text(), 'synthetic retained public certificate')
 
     def test_open_legacy_interface_blocks_upgrade_before_files_change(self):
         self.install()

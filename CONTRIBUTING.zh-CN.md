@@ -2,7 +2,7 @@
 
 [English](CONTRIBUTING.md) · 简体中文
 
-NiriBridge 是采用 GPL-3.0-or-later 的早期测试版。除非另有明确约定，贡献按项目相同许可证提交；保留第三方版权和许可声明。首个开发验证平台为 Ubuntu 26.04 和 Niri 26.04。
+NiriBridge 采用 GPL-3.0-or-later。除非另有明确约定，贡献按项目相同许可证提交；保留第三方版权和许可声明。首个开发验证平台为 Ubuntu 26.04 和 Niri 26.04。
 
 ## 开始前
 

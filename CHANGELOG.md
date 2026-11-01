@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-rc.1
+
+- Refresh the security baseline to rustls 0.23.46, rustls-webpki 0.103.16 and Tokio 1.53.3. Migrate to maintained zbus 6 and its integrated wire types instead of the retired standalone zvariant crates. Retain the zero-warning dependency audit gate.
+
+- Keep multiple explicitly paired computers and their public certificates and SHA-256 fingerprints. Importing another computer keeps earlier pairings and the current selection; repeated imports do not reset saved settings.
+- Select a saved computer from Devices & pairing. Switching first stops sharing, restores that computer's connection address and local screen connections, and leaves sharing stopped until Start sharing is chosen.
+- Retain legacy single-peer configurations and identities. Saved computers use independent fingerprint-addressed public certificate files; equal names do not replace one another's trust.
+- Trust only the selected computer in TLS. Refuse selection while that configuration is running, including calls with a different runtime directory. Verify saved certificate fingerprints again before connecting.
+- Preserve per-computer settings in the same revision-checked transaction as screen-layout changes. Cover failed writes, unacknowledged layout rollback, changed certificates, stale edits and switching away and back.
+- Add English and Simplified Chinese saved-device controls and three-device installation/upgrade/removal checks.
+
+This is a release candidate for Ubuntu 26.04 x86_64 with Niri 26.04 or KDE Plasma
+6.6 Wayland. Physical multi-device switching acceptance and the stable-release
+decision remain pending; see [the release checklist](docs/multi-device-pairing.md).
+
 ## 0.3.0-beta.3
 
 - Keep native pairing-file dialogs alive until the user selects a file or cancels, fixing export and import buttons that appeared to do nothing on Niri and KDE.
