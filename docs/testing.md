@@ -19,6 +19,14 @@ Routine Rust tests cover protocol bounds, geometry, held-state cleanup, authenti
 
 The translation test checks every marked English message against the Chinese catalog, validates placeholders and checks language-selection behavior and private preference storage.
 
+LAN authorization tests mock network discovery, UFW and administrator execution;
+they must never modify the host firewall. Cover the exact preview digest,
+configuration changes during review, repeated authorization, external rules,
+disabled UFW and failure recovery. Widget tests cover copyable local addresses,
+both connection roles, unsaved settings, cancellation and useful next steps.
+These checks do not establish real administrator-dialog or firewall behavior;
+verify those separately with explicit permission on the target desktop.
+
 ## Desktop widget tests
 
 These tests open a clearly labeled test window using simulated state. They do not operate the live sharing service or send physical input:

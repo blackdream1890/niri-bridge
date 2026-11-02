@@ -4,9 +4,13 @@ from __future__ import annotations
 from i18n import _, N_
 import json
 import copy
+import fcntl
+import hashlib
+import ipaddress
 import os
 from pathlib import Path
 import socket
+import stat
 import subprocess
 import tempfile
 
@@ -40,6 +44,17 @@ ERRORS = {
     'input_selection_empty': N_("Select at least one keyboard, mouse or touchpad."),
     'input_path_invalid': N_("The input device path is unavailable. Select the device again from the list."),
     'address_invalid': N_("The address or port is invalid. Check it and try again."),
+    'peer_address_required': N_("Enter the other computer's actual IP address or hostname. 0.0.0.0 and :: are only for waiting for a connection."),
+    'firewall_peer_invalid': N_("Enter one LAN IPv4 address, such as 192.168.1.20. Copy it from the other computer's Local address field; do not include a port or address range."),
+    'firewall_listen_required': N_("Choose Wait for the other computer to connect and save the local settings before allowing LAN access."),
+    'firewall_route_changed': N_("The LAN connection changed. Check both computers' local addresses and prepare the permission again."),
+    'firewall_inactive': N_("The firewall is not enabled, so this permission is not needed. Its state was left unchanged."),
+    'firewall_unavailable': N_("The system firewall is unavailable. No permission was added. Check this computer's network settings if the connection still fails."),
+    'firewall_changed': N_("The firewall rules changed during authorization. Check the connection and try again."),
+    'firewall_failed': N_("LAN access could not be allowed. Check the connection settings and try again; sharing has not been restarted."),
+    'firewall_cancelled': N_("Administrator authorization was canceled or could not be completed. No LAN permission was added."),
+    'firewall_busy': N_("Another firewall change is in progress. Wait for it to finish, then try again."),
+    'firewall_plan_invalid': N_("The LAN permission could not be verified. Prepare it again before authorizing access."),
     'settings_write_failed': N_("Settings could not be saved. Check access to the configuration directory."),
     'settings_permissions': N_("Configuration permissions are incorrect. Your settings were not changed."),
     'backend_unavailable': N_("The background program is unavailable. Check that NiriBridge is installed."),
@@ -55,8 +70,17 @@ class OperationError(Exception):
         super().__init__(_(ERRORS.get(code, ERRORS['operation_failed'])))
 
 
-def endpoint(host, port):
+def is_unspecified_address(host):
+    try:
+        return ipaddress.ip_address(host.strip().strip('[]')).is_unspecified
+    except ValueError:
+        return False
+
+
+def endpoint(host, port, mode=None):
     host = host.strip()
+    if mode == 'connect' and (not host or is_unspecified_address(host)):
+        raise OperationError('peer_address_required')
     if not host or any(c.isspace() for c in host) or not 1 <= int(port) <= 65535:
         raise OperationError('address_invalid')
     if ':' in host and not host.startswith('['):
@@ -69,6 +93,16 @@ def split_endpoint(value):
     if not sep:
         return value, 42420
     return host.strip('[]'), int(port)
+
+
+def lan_peer_address(value):
+    try:
+        address = ipaddress.IPv4Address(value.strip())
+        if any(address in ipaddress.IPv4Network(network) for network in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')):
+            return str(address)
+    except (ValueError, AttributeError):
+        pass
+    raise OperationError('firewall_peer_invalid')
 
 
 class Model:
@@ -162,7 +196,8 @@ class Model:
         except (OperationError, ValueError, KeyError):
             outputs = {}
         version = self.command([self.binary, '--version']).strip().rsplit(' ', 1)[-1]
-        return {'config': config, 'devices': devices, 'outputs': outputs, 'version': version, **self.poll()}
+        return {'config': config, 'devices': devices, 'outputs': outputs, 'version': version,
+                'network': self.network_info(), **self.poll()}
 
     def ensure_managed(self):
         if self.poll().get('unmanaged'):
@@ -280,6 +315,130 @@ class Model:
             self.command(['/usr/bin/python3', self.helper, 'plan', '--config', str(self.config), '--output', plan])
             self.command(['pkexec', '/usr/bin/python3', self.helper, 'install', '--plan', plan], timeout=180)
         return self.load()
+
+    def _firewall_command(self, arguments, timeout=12):
+        try:
+            result = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout)
+        except OSError as error:
+            raise OperationError('firewall_unavailable') from error
+        except subprocess.TimeoutExpired as error:
+            raise OperationError('firewall_failed') from error
+        if arguments[0] == 'pkexec' and result.returncode in (126, 127):
+            raise OperationError('firewall_cancelled')
+        try:
+            reply = json.loads(result.stdout)
+        except (ValueError, TypeError) as error:
+            raise OperationError('firewall_failed') from error
+        if not isinstance(reply, dict) or reply.get('ok') is not True:
+            code = reply.get('error') if isinstance(reply, dict) else None
+            raise OperationError(code if isinstance(code, str) and code in ERRORS and code.startswith('firewall_') else 'firewall_failed')
+        if result.returncode:
+            raise OperationError('firewall_failed')
+        return reply
+
+    def network_info(self):
+        try:
+            result = self._firewall_command(['/usr/bin/python3', self.helper, 'network-info', '--config', str(self.config)])
+            addresses = []
+            for item in result.get('addresses', []):
+                if not isinstance(item, dict) or not isinstance(item.get('interface'), str):
+                    continue
+                addresses.append({'address': lan_peer_address(item.get('address')), 'interface': item['interface']})
+            port = result.get('port')
+            return {'addresses': addresses, 'port': port if type(port) is int and 1 <= port <= 65535 else None}
+        except (OperationError, TypeError):
+            # Older helpers and unavailable LAN metadata must not prevent setup.
+            return {'addresses': [], 'port': None}
+
+    def _firewall_context(self, revision, fingerprint):
+        view = self.manage('show', '--config', self.config)
+        if view.get('revision') != revision or (view.get('peer') or {}).get('fingerprint') != fingerprint:
+            raise OperationError('settings_conflict')
+        if view.get('settings', {}).get('connection', {}).get('mode') != 'listen':
+            raise OperationError('firewall_listen_required')
+        if not fingerprint:
+            raise OperationError('peer_not_found')
+        return view
+
+    @staticmethod
+    def _check_firewall_plan(plan, peer, port):
+        if (not isinstance(plan, dict) or set(plan) != {'version', 'kind', 'peer', 'local', 'interface', 'port'}
+                or type(plan['version']) is not int or plan['version'] != 1 or plan['kind'] != 'lan-firewall'
+                or type(plan['port']) is not int or plan['port'] != port
+                or not isinstance(plan['interface'], str) or not plan['interface']
+                or any(character.isspace() for character in plan['interface'])):
+            raise OperationError('firewall_plan_invalid')
+        if lan_peer_address(plan['peer']) != peer or lan_peer_address(plan['local']) == peer:
+            raise OperationError('firewall_plan_invalid')
+
+    def prepare_firewall(self, peer, revision, fingerprint):
+        peer = lan_peer_address(peer)
+        view = self._firewall_context(revision, fingerprint)
+        port = split_endpoint(view['settings']['connection']['address'])[1]
+        with tempfile.TemporaryDirectory(prefix='niri-bridge-lan-plan-') as directory:
+            path = Path(directory) / 'plan.json'
+            reply = self._firewall_command(['/usr/bin/python3', self.helper, 'firewall-plan',
+                '--config', str(self.config), '--peer', peer, '--output', str(path)])
+            try:
+                metadata = path.lstat()
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077 or metadata.st_size > 16384:
+                    raise OperationError('firewall_plan_invalid')
+                raw = path.read_bytes()
+                plan = json.loads(raw)
+            except (OSError, ValueError) as error:
+                raise OperationError('firewall_plan_invalid') from error
+        self._check_firewall_plan(plan, peer, port)
+        digest = hashlib.sha256(raw).hexdigest()
+        if reply.get('plan', plan) != plan or reply.get('sha256', digest) != digest:
+            raise OperationError('firewall_plan_invalid')
+        self._firewall_context(revision, fingerprint)
+        return {'plan': plan, 'bytes': raw, 'sha256': digest, 'revision': revision,
+                'fingerprint': fingerprint, 'config': str(self.config.resolve()),
+                'name': view['peer']['name'], 'peer': peer}
+
+    def grant_firewall(self, prepared):
+        if prepared.get('config') != str(self.config.resolve()):
+            raise OperationError('settings_conflict')
+        try:
+            descriptor = os.open(self.config.with_suffix('.edit.lock'), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        except OSError as error:
+            raise OperationError('settings_permissions') from error
+        locked = False
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+                raise OperationError('settings_permissions')
+            os.set_inheritable(descriptor, False)
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise OperationError('settings_busy') from error
+            locked = True
+            # Hold the Rust configuration edit lock throughout the administrator
+            # prompt, so another managed edit cannot replace the reviewed peer.
+            view = self._firewall_context(prepared['revision'], prepared['fingerprint'])
+            raw = prepared['bytes']
+            try:
+                plan = json.loads(raw)
+            except (ValueError, TypeError) as error:
+                raise OperationError('firewall_plan_invalid') from error
+            if plan != prepared['plan'] or hashlib.sha256(raw).hexdigest() != prepared['sha256']:
+                raise OperationError('firewall_plan_invalid')
+            self._check_firewall_plan(plan, prepared['peer'], split_endpoint(view['settings']['connection']['address'])[1])
+            with tempfile.TemporaryDirectory(prefix='niri-bridge-lan-authorize-') as directory:
+                with tempfile.NamedTemporaryFile(dir=directory, suffix='.json') as file:
+                    file.write(raw)
+                    file.flush()
+                    return self._firewall_command(['pkexec', '/usr/bin/python3', self.helper,
+                        'firewall-install', '--plan', file.name, '--sha256', prepared['sha256']], timeout=180)
+        except OSError as error:
+            raise OperationError('settings_permissions') from error
+        finally:
+            try:
+                if locked:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
 
     def diagnostics(self):
         # doctor intentionally excludes peer addresses, identities, and input contents.

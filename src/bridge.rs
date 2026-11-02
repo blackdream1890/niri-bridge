@@ -174,6 +174,12 @@ fn unlocked(status: &watch::Receiver<Status>) -> bool {
 }
 
 fn connection_error_code(error: &anyhow::Error) -> &'static str {
+    if error
+        .chain()
+        .any(|cause| cause.to_string() == "peer_address_required")
+    {
+        return "peer_address_required";
+    }
     if error.chain().any(|cause| {
         let tls_error = cause.downcast_ref::<rustls::Error>().or_else(|| {
             cause
@@ -1053,6 +1059,12 @@ pub async fn coordinate_with_control<
 mod tests {
     use super::*;
     use crate::geometry::Edge;
+
+    #[test]
+    fn unspecified_peer_address_retains_its_actionable_reason_through_context() {
+        let error = anyhow::anyhow!("peer_address_required").context("Connection failed");
+        assert_eq!(connection_error_code(&error), "peer_address_required");
+    }
 
     #[test]
     fn incompatible_peer_versions_are_reported_separately_from_connection_failures() {

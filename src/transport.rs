@@ -98,11 +98,27 @@ pub fn server_config(local: &Identity, peer: CertificateDer<'static>) -> Result<
     Ok(Arc::new(config))
 }
 
+/// Wildcard bind addresses describe this machine, never a remote destination.
+/// Keep hostname and loopback destinations available for normal DNS and tunnels.
+pub fn validate_peer_address(address: &str) -> Result<()> {
+    if let Some((host, _port)) = address.rsplit_once(':') {
+        let host = host.trim_start_matches('[').trim_end_matches(']');
+        ensure!(
+            !host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_unspecified()),
+            "peer_address_required"
+        );
+    }
+    Ok(())
+}
+
 pub async fn connect(
     address: &str,
     peer_name: &str,
     config: Arc<ClientConfig>,
 ) -> Result<tokio_rustls::client::TlsStream<TcpStream>> {
+    validate_peer_address(address)?;
     let stream = timeout(HANDSHAKE_TIMEOUT, TcpStream::connect(address))
         .await
         .context("Connection timed out")??;

@@ -15,6 +15,7 @@ English · [简体中文](requirements.zh-CN.md)
 - A native desktop interface provides screen connections that can be adjusted on one computer and synchronized to both.
 - Multiple configurable edge pairs connect the same two computers. Each has independent displays and ranges, and can be used for entry or return in either direction.
 - The interface uses English source text, a complete Simplified Chinese translation, system locale selection and a manual language choice for English-speaking and Chinese-speaking users.
+- Connection setup supplies actual local addresses and actionable next steps. Input and LAN permissions can be reviewed and authorized in the application. Invalid peer addresses and unsaved connection changes are caught before starting; users are not expected to diagnose generic connection failures from a terminal.
 
 ## Configuration and community scope
 

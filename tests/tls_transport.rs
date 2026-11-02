@@ -18,6 +18,44 @@ fn identity(name: &str) -> Identity {
 }
 
 #[test]
+fn peer_addresses_keep_dns_loopback_and_reject_unspecified_ipv4_and_ipv6() {
+    for address in ["0.0.0.0:42420", "[::]:42420", "[0:0:0:0:0:0:0:0]:42420"] {
+        assert!(transport::validate_peer_address(address).is_err());
+    }
+    for address in [
+        "127.0.0.1:42420",
+        "[::1]:42420",
+        "desktop.local:42420",
+        "192.0.2.20:42420",
+        "[2001:db8::1]:42420",
+    ] {
+        assert!(transport::validate_peer_address(address).is_ok());
+    }
+}
+
+#[tokio::test]
+async fn unspecified_destination_is_rejected_before_opening_a_socket() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local = identity("local.test");
+    let peer = identity("peer.test");
+    let client = transport::client_config(&local, peer.certificate.clone()).unwrap();
+    let address = format!("0.0.0.0:{}", listener.local_addr().unwrap().port());
+    let error = transport::connect(&address, "peer.test", client)
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(
+        niri_bridge::manager::error_code(&error),
+        "peer_address_required"
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(20), listener.accept())
+            .await
+            .is_err()
+    );
+}
+
+#[test]
 fn pem_identity_loading_preserves_private_key_permissions_and_symlink_checks() {
     use std::os::unix::fs::{PermissionsExt, symlink};
     let directory = tempfile::tempdir().unwrap();

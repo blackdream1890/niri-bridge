@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """UI behavior tests use simulated state and never call the live input service."""
 import copy
+import fcntl
 import gc
+import hashlib
 import weakref
 import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import threading
@@ -16,7 +19,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 from app import Application, Window
 from canvas import LayoutDraft, OPPOSITE
-from model import Model, OperationError, endpoint, split_endpoint
+from model import Model, OperationError, endpoint, lan_peer_address, split_endpoint
 from i18n import _
 
 
@@ -35,7 +38,9 @@ def fixture():
                   {'name': 'office', 'fingerprint': '1234567890abcdef' * 4, 'expires': '2027-09-08', 'active': False}],
               'settings': {'connection': {'mode': 'connect', 'address': 'desktop.local:42420'},
                            'activity_devices': ['/dev/input/by-path/test-keyboard', '/dev/input/by-path/test-touchpad'], 'native_touchpads': True}}
-    return {'version': '1.0.0-rc.1', 'config': config, 'outputs': local['outputs'], 'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
+    return {'version': '1.0.0-rc.1', 'config': config, 'outputs': local['outputs'],
+            'network': {'addresses': [{'address': '192.168.50.10', 'interface': 'wlan-test'}], 'port': 42420},
+            'service': {'ActiveState': 'active', 'SubState': 'running', 'UnitFileState': 'enabled'},
             'status': {'connection': 'connected', 'role': 'local', 'local_unlocked': True, 'peer_unlocked': True,
                        'peer_name': 'desktop', 'latency_ms': 1.6, 'local': local, 'peer': peer, 'configuring': False},
             'devices': {'uinput_writable': True, 'devices': [
@@ -107,6 +112,22 @@ class GeometryTests(unittest.TestCase):
     def test_addresses_round_trip_ipv4_dns_and_ipv6(self):
         for host in ['192.0.2.10', 'desktop.local', '2001:db8::1']:
             self.assertEqual(split_endpoint(endpoint(host, 42420)), (host, 42420))
+
+    def test_connect_rejects_unspecified_addresses_but_listen_keeps_them(self):
+        for host in ('0.0.0.0', '::', '0:0:0:0:0:0:0:0', '[::]'):
+            with self.subTest(host=host):
+                with self.assertRaises(OperationError) as error:
+                    endpoint(host, 42420, 'connect')
+                self.assertEqual(error.exception.code, 'peer_address_required')
+                self.assertTrue(endpoint(host, 42420, 'listen').endswith(':42420'))
+        with self.assertRaises(OperationError) as error:
+            endpoint('  ', 42420, 'connect')
+        self.assertEqual(error.exception.code, 'peer_address_required')
+
+    def test_connect_preserves_loopback_dns_and_other_ip_addresses(self):
+        for host in ('127.0.0.1', '::1', '192.0.2.10', '2001:db8::1', 'desktop.local'):
+            with self.subTest(host=host):
+                self.assertEqual(split_endpoint(endpoint(host, 42420, 'connect')), (host, 42420))
 
     def test_second_connection_uses_the_portrait_edge_without_overwriting_the_first(self):
         f = fixture()
@@ -236,6 +257,498 @@ class FileChooserTests(unittest.TestCase):
         self.assertIsNone(self.window.file_chooser)
         dialog.emit('response', Gtk.ResponseType.ACCEPT)
         self.assertFalse(destination.exists())
+
+
+class ConnectionAddressWidgetTests(unittest.TestCase):
+    def setUp(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest('A GTK display is required')
+        self.model = FakeModel()
+        with mock.patch('app.Window.setup_tray'):
+            self.window = Window(None, self.model)
+        pump(lambda: self.window.info is not None and not self.window.busy)
+        self.window.navigate('pair')
+
+    def tearDown(self):
+        self.window.destroy()
+        self.model.directory.cleanup()
+
+    def test_user_switch_to_connect_clears_only_the_listening_wildcard(self):
+        window = self.window
+        for host in ('0.0.0.0', '::', '0:0:0:0:0:0:0:0'):
+            with self.subTest(host=host):
+                window.connection_mode.set_active_id('listen')
+                window.host_entry.set_text(host)
+                self.assertEqual(window.current_settings()['connection']['mode'], 'listen')
+                window.connection_mode.set_active_id('connect')
+                self.assertEqual(window.host_entry.get_text(), '')
+                self.assertEqual(window.notice_label.get_text(), str(OperationError('peer_address_required')))
+        for host in ('desktop.local', '192.0.2.10', '::1'):
+            with self.subTest(host=host):
+                window.connection_mode.set_active_id('listen')
+                window.host_entry.set_text(host)
+                window.connection_mode.set_active_id('connect')
+                self.assertEqual(window.host_entry.get_text(), host)
+        self.assertEqual(self.model.actions, [])
+
+    def test_loading_an_old_invalid_connect_address_keeps_it_visible_for_repair(self):
+        window = self.window
+        for address, host in (('0.0.0.0:42420', '0.0.0.0'), ('[::]:42420', '::')):
+            with self.subTest(address=address):
+                self.model.data['config']['settings']['connection'] = {'mode': 'connect', 'address': address}
+                window.settings_dirty = False
+                window.populate(self.model.load())
+                self.assertEqual(window.host_entry.get_text(), host)
+                self.assertEqual(window.connection_mode.get_active_id(), 'connect')
+                self.assertFalse(window.settings_dirty)
+                self.assertEqual(self.model.data['config']['settings']['connection']['address'], address)
+        self.assertEqual(self.model.actions, [])
+
+    def test_invalid_connect_save_never_calls_model_or_restarts_sharing(self):
+        window = self.window
+        self.model.save_settings = mock.Mock()
+        for host in ('0.0.0.0', '::', ''):
+            with self.subTest(host=host):
+                window.host_entry.set_text(host)
+                window.network_save.emit('clicked')
+                self.assertFalse(window.busy)
+                self.assertEqual(window.notice_label.get_text(), str(OperationError('peer_address_required')))
+        self.model.save_settings.assert_not_called()
+        self.assertEqual(self.model.actions, [])
+
+    def test_invalid_and_valid_address_drafts_survive_language_rebuild_state(self):
+        for host in ('0.0.0.0', '::', 'new-desktop.local'):
+            with self.subTest(host=host):
+                self.window.host_entry.set_text(host)
+                state = self.window.editing_state()
+                with mock.patch('app.Window.setup_tray'):
+                    restored = Window(None, self.model, restore_state=state)
+                try:
+                    pump(lambda: restored.info is not None and not restored.busy)
+                    self.assertEqual(restored.host_entry.get_text(), host)
+                    self.assertEqual(restored.connection_mode.get_active_id(), 'connect')
+                    self.assertTrue(restored.settings_dirty)
+                finally:
+                    restored.destroy()
+        self.assertEqual(self.model.actions, [])
+
+    def test_backend_invalid_peer_address_explains_the_required_action(self):
+        data = self.model.poll()
+        data['status']['reason'] = 'peer_address_required'
+        data['status']['connection'] = 'connecting'
+        data['status']['local_unlocked'] = False
+        self.window.update_status(data)
+        self.assertEqual(self.window.hero_title.get_text(), _("Enter the other computer's address"))
+        self.assertEqual(self.window.hero_description.get_text(), str(OperationError('peer_address_required')))
+        self.assertEqual(self.window.header_badge.get_text(), _('Address required'))
+        self.assertEqual(self.model.actions, [])
+
+
+class LanFirewallModelTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.model = Model(config=Path(self.directory.name) / 'config.toml', helper='/synthetic/input-helper')
+        self.model.config.write_text('# synthetic configuration')
+        self.view = fixture()['config']
+        self.view['settings']['connection'] = {'mode': 'listen', 'address': '0.0.0.0:43111'}
+        self.model.manage = mock.Mock(side_effect=lambda *_args: copy.deepcopy(self.view))
+        self.plan = {'version': 1, 'kind': 'lan-firewall', 'peer': '192.168.50.20',
+                     'local': '192.168.50.10', 'interface': 'wlan-test', 'port': 43111}
+        self.raw = json.dumps(self.plan, indent=1).encode() + b'\n'
+        self.digest = hashlib.sha256(self.raw).hexdigest()
+        self.calls = []
+        self.privileged_result = (0, {'ok': True, 'already_allowed': False})
+        self.plan_error = None
+        self.plan_mode = 0o600
+        self.during_authorization = None
+        def run(arguments, **_kwargs):
+            self.calls.append(arguments)
+            if arguments[0] == 'pkexec':
+                self.assertEqual(arguments[:4], ['pkexec', '/usr/bin/python3', self.model.helper, 'firewall-install'])
+                path = Path(arguments[arguments.index('--plan') + 1])
+                self.assertEqual(path.read_bytes(), self.raw)
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(arguments[-2:], ['--sha256', self.digest])
+                if self.during_authorization:
+                    self.during_authorization()
+                code, reply = self.privileged_result
+                return subprocess.CompletedProcess(arguments, code, json.dumps(reply), 'untrusted raw stderr')
+            self.assertEqual(arguments[:3], ['/usr/bin/python3', self.model.helper, 'firewall-plan'])
+            self.assertEqual(arguments[arguments.index('--config') + 1], str(self.model.config))
+            self.assertEqual(arguments[arguments.index('--peer') + 1], self.plan['peer'])
+            if self.plan_error:
+                return subprocess.CompletedProcess(arguments, 1, json.dumps({'ok': False, 'error': self.plan_error}), 'untrusted raw stderr')
+            path = Path(arguments[arguments.index('--output') + 1])
+            path.write_bytes(self.raw)
+            path.chmod(self.plan_mode)
+            return subprocess.CompletedProcess(arguments, 0,
+                json.dumps({'ok': True, 'plan': self.plan, 'sha256': self.digest}), '')
+        self.runner = mock.patch('model.subprocess.run', side_effect=run).start()
+        self.addCleanup(mock.patch.stopall)
+
+    def prepare(self):
+        return self.model.prepare_firewall(self.plan['peer'], self.view['revision'], self.view['peer']['fingerprint'])
+
+    def test_plan_and_privilege_bind_exact_bytes_port_and_digest_without_service_changes(self):
+        prepared = self.prepare()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(prepared['plan']['port'], 43111)
+        self.assertEqual(prepared['bytes'], self.raw)
+        self.assertEqual(prepared['sha256'], self.digest)
+        result = self.model.grant_firewall(prepared)
+        self.assertTrue(result['ok'])
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(self.calls[-1][0], 'pkexec')
+
+    def test_invalid_peer_addresses_never_prepare_or_authorize(self):
+        for peer in ('', '8.8.8.8', '172.32.0.1', '127.0.0.1', '169.254.1.2', '::1', '192.168.1.2/24', '192.168.1.2:43111'):
+            with self.subTest(peer=peer), self.assertRaises(OperationError) as error:
+                self.model.prepare_firewall(peer, self.view['revision'], self.view['peer']['fingerprint'])
+            self.assertEqual(error.exception.code, 'firewall_peer_invalid')
+        self.assertEqual(self.calls, [])
+        self.model.manage.assert_not_called()
+        for peer in ('10.0.0.2', '172.16.0.2', '192.168.1.2'):
+            self.assertEqual(lan_peer_address(peer), peer)
+
+    def test_changed_revision_or_peer_before_prepare_has_no_helper_call(self):
+        for revision, fingerprint in (('changed', self.view['peer']['fingerprint']), (self.view['revision'], 'changed')):
+            with self.subTest(revision=revision), self.assertRaises(OperationError) as error:
+                self.model.prepare_firewall(self.plan['peer'], revision, fingerprint)
+            self.assertEqual(error.exception.code, 'settings_conflict')
+        self.assertEqual(self.calls, [])
+
+    def test_changed_revision_after_prepare_cannot_authorize(self):
+        prepared = self.prepare()
+        self.view['revision'] = 'b' * 64
+        with self.assertRaises(OperationError) as error:
+            self.model.grant_firewall(prepared)
+        self.assertEqual(error.exception.code, 'settings_conflict')
+        self.assertEqual(len(self.calls), 1)
+
+    def test_changed_selection_during_preparation_does_not_return_a_plan(self):
+        before = copy.deepcopy(self.view)
+        after = copy.deepcopy(before)
+        after['peer']['fingerprint'] = 'c' * 64
+        self.model.manage.side_effect = [before, after]
+        with self.assertRaises(OperationError) as error:
+            self.prepare()
+        self.assertEqual(error.exception.code, 'settings_conflict')
+        self.assertFalse(any(call[0] == 'pkexec' for call in self.calls))
+
+    def test_only_saved_listening_configuration_can_prepare(self):
+        self.view['settings']['connection']['mode'] = 'connect'
+        with self.assertRaises(OperationError) as error:
+            self.prepare()
+        self.assertEqual(error.exception.code, 'firewall_listen_required')
+        self.assertEqual(self.calls, [])
+
+    def test_pkexec_cancellation_has_a_friendly_error_and_does_not_retry(self):
+        prepared = self.prepare()
+        for code in (126, 127):
+            self.privileged_result = (code, None)
+            with self.subTest(code=code), self.assertRaises(OperationError) as error:
+                self.model.grant_firewall(prepared)
+            self.assertEqual(error.exception.code, 'firewall_cancelled')
+            self.assertNotIn('untrusted raw stderr', str(error.exception))
+        self.assertEqual(len(self.calls), 3)
+
+    def test_nonzero_helper_errors_are_decoded_without_raw_stderr(self):
+        self.plan_error = 'firewall_inactive'
+        with self.assertRaises(OperationError) as error:
+            self.prepare()
+        self.assertEqual(error.exception.code, 'firewall_inactive')
+        self.assertNotIn('untrusted raw stderr', str(error.exception))
+        self.assertFalse(any(call[0] == 'pkexec' for call in self.calls))
+
+    def test_unfrozen_or_nonprivate_plan_cannot_authorize(self):
+        self.plan_mode = 0o644
+        with self.assertRaises(OperationError) as error:
+            self.prepare()
+        self.assertEqual(error.exception.code, 'firewall_plan_invalid')
+        self.plan_mode = 0o600
+        prepared = self.prepare()
+        prepared['plan']['port'] = 42420
+        with self.assertRaises(OperationError) as error:
+            self.model.grant_firewall(prepared)
+        self.assertEqual(error.exception.code, 'firewall_plan_invalid')
+        self.assertFalse(any(call[0] == 'pkexec' for call in self.calls))
+
+    def test_old_helper_network_info_failure_does_not_block_loading(self):
+        self.runner.side_effect = None
+        self.runner.return_value = subprocess.CompletedProcess([], 2, '', 'old helper usage')
+        self.model.command = mock.Mock(side_effect=[json.dumps({'devices': []}), '{}', 'niri-bridge test'])
+        self.model.poll = mock.Mock(return_value={})
+        loaded = self.model.load()
+        self.assertEqual(loaded['config'], self.view)
+        self.assertEqual(loaded['network'], {'addresses': [], 'port': None})
+
+    def test_configuration_edit_lock_covers_authorization_and_is_released_on_every_outcome(self):
+        prepared = self.prepare()
+        lock_path = self.model.config.with_suffix('.edit.lock')
+        def verify_locked():
+            with lock_path.open('r+b') as other:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            inode = lock_path.stat().st_ino
+            descriptors = [int(path.name) for path in Path('/proc/self/fd').iterdir() if path.name.isdigit()]
+            held = []
+            for descriptor in descriptors:
+                try:
+                    if os.fstat(descriptor).st_ino == inode:
+                        held.append(descriptor)
+                except OSError:
+                    pass
+            self.assertTrue(held)
+            self.assertTrue(all(not os.get_inheritable(descriptor) for descriptor in held))
+        for outcome in ('success', 'canceled', 'exception'):
+            with self.subTest(outcome=outcome):
+                def authorize():
+                    verify_locked()
+                    if outcome == 'exception':
+                        raise subprocess.TimeoutExpired('synthetic pkexec', 180)
+                self.during_authorization = authorize
+                self.privileged_result = (126, None) if outcome == 'canceled' else (0, {'ok': True})
+                if outcome == 'success':
+                    self.model.grant_firewall(prepared)
+                else:
+                    with self.assertRaises(OperationError):
+                        self.model.grant_firewall(prepared)
+                with lock_path.open('r+b') as other:
+                    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(other, fcntl.LOCK_UN)
+
+    def test_busy_or_unsafe_configuration_lock_prevents_privileged_call(self):
+        prepared = self.prepare()
+        lock_path = self.model.config.with_suffix('.edit.lock')
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(OperationError) as error:
+                self.model.grant_firewall(prepared)
+            self.assertEqual(error.exception.code, 'settings_busy')
+        finally:
+            os.close(descriptor)
+        lock_path.chmod(0o644)
+        with self.assertRaises(OperationError) as error:
+            self.model.grant_firewall(prepared)
+        self.assertEqual(error.exception.code, 'settings_permissions')
+        self.assertFalse(any(call[0] == 'pkexec' for call in self.calls))
+
+
+class LanFirewallWidgetTests(unittest.TestCase):
+    def setUp(self):
+        if not Gtk.init_check()[0]:
+            self.skipTest('A GTK display is required')
+        self.model = FakeModel()
+        self.model.data['config']['settings']['connection'] = {'mode': 'listen', 'address': '0.0.0.0:43111'}
+        self.model.data['network'] = {'addresses': [
+            {'address': '192.168.50.10', 'interface': 'wlan-test'},
+            {'address': '10.0.0.10', 'interface': 'eth-test'}], 'port': 43111}
+        self.prepared = {'plan': {'version': 1, 'kind': 'lan-firewall', 'peer': '192.168.50.20',
+            'local': '192.168.50.10', 'interface': 'wlan-test', 'port': 43111}, 'name': 'desktop'}
+        self.model.prepare_firewall = mock.Mock(return_value=self.prepared)
+        self.model.grant_firewall = mock.Mock(return_value={'ok': True})
+        self.model.grant_devices = mock.Mock()
+        with mock.patch('app.Window.setup_tray'):
+            self.window = Window(None, self.model)
+        pump(lambda: self.window.info is not None and not self.window.busy)
+        self.window.navigate('pair')
+
+    def tearDown(self):
+        self.window.destroy()
+        self.model.directory.cleanup()
+
+    def test_listening_preparation_copies_plain_addresses_and_shows_the_saved_port(self):
+        window = self.window
+        self.assertTrue(window.firewall_box.get_visible())
+        self.assertTrue(window.firewall_button.get_sensitive())
+        self.assertIn('43111', window.local_port_label.get_text())
+        clipboard = mock.Mock()
+        with mock.patch('app.Gtk.Clipboard.get', return_value=clipboard):
+            for row in window.local_addresses_box.get_children():
+                next(child for child in row.get_children() if isinstance(child, Gtk.Button)).emit('clicked')
+        self.assertEqual(clipboard.set_text.call_args_list, [mock.call('192.168.50.10', -1), mock.call('10.0.0.10', -1)])
+        self.assertEqual(self.model.actions, [])
+
+    def test_connect_role_unpaired_and_unsaved_settings_do_not_offer_authorization(self):
+        window = self.window
+        window.host_entry.set_text('127.0.0.1')
+        self.assertFalse(window.firewall_button.get_sensitive())
+        with mock.patch.object(window, 'ask_lan_peer') as ask:
+            window.allow_lan_connection()
+        ask.assert_not_called()
+        window.connection_mode.set_active_id('connect')
+        self.assertFalse(window.firewall_box.get_visible())
+        self.model.data['config']['peer'] = None
+        window.settings_dirty = False
+        window.populate(self.model.load())
+        self.assertFalse(window.firewall_button.get_sensitive())
+        self.model.prepare_firewall.assert_not_called()
+        self.model.grant_firewall.assert_not_called()
+
+    def test_canceling_address_or_scope_review_never_authorizes(self):
+        window = self.window
+        with mock.patch.object(window, 'ask_lan_peer', return_value=None):
+            window.firewall_button.emit('clicked')
+        self.model.prepare_firewall.assert_not_called()
+        with mock.patch.object(window, 'ask_lan_peer', return_value='192.168.50.20'), mock.patch.object(window, 'confirm', return_value=False):
+            window.firewall_button.emit('clicked')
+            pump(lambda: not window.busy)
+        self.model.grant_firewall.assert_not_called()
+        self.assertEqual(self.model.actions, [])
+
+    def test_address_dialog_requires_one_private_ipv4_and_names_the_paired_computer(self):
+        observed = []
+        def descendants(widget):
+            yield widget
+            if isinstance(widget, Gtk.Container):
+                for child in widget.get_children():
+                    yield from descendants(child)
+        def respond():
+            dialog = next(widget for widget in Gtk.Window.list_toplevels()
+                          if isinstance(widget, Gtk.Dialog) and widget.get_transient_for() == self.window)
+            entry = next(widget for widget in descendants(dialog) if isinstance(widget, Gtk.Entry))
+            accept = dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT)
+            for value in ('', '8.8.8.8', '::1', '192.168.1.20/24', '192.168.1.20:43111'):
+                entry.set_text(value)
+                observed.append(not accept.get_sensitive())
+            entry.set_text('192.168.50.20')
+            observed.append(accept.get_sensitive())
+            observed.append(any('desktop' in widget.get_text() for widget in descendants(dialog) if isinstance(widget, Gtk.Label)))
+            dialog.response(Gtk.ResponseType.CANCEL)
+            return False
+        GLib.idle_add(respond)
+        self.assertIsNone(self.window.ask_lan_peer('desktop'))
+        self.assertTrue(all(observed))
+        self.model.prepare_firewall.assert_not_called()
+        self.assertEqual(self.model.actions, [])
+
+    def test_confirmation_contains_exact_scope_and_success_keeps_drafts_and_sharing(self):
+        window = self.window
+        window.layout_dirty = True
+        draft = window.editor.draft
+        generation = window.poll_generation
+        before = copy.deepcopy(self.model.data)
+        with mock.patch.object(window, 'ask_lan_peer', return_value='192.168.50.20'), mock.patch.object(window, 'confirm', return_value=True) as confirm:
+            window.firewall_button.emit('clicked')
+            pump(lambda: not window.busy)
+        self.model.prepare_firewall.assert_called_once_with('192.168.50.20', before['config']['revision'], before['config']['peer']['fingerprint'])
+        scope = confirm.call_args.args[1]
+        for value in ('192.168.50.20', '192.168.50.10', '43111', 'wlan-test'):
+            self.assertIn(value, scope)
+        self.model.grant_firewall.assert_called_once_with(self.prepared)
+        self.model.grant_devices.assert_not_called()
+        self.assertEqual(self.model.data, before)
+        self.assertEqual(self.model.actions, [])
+        self.assertTrue(window.layout_dirty)
+        self.assertIs(window.editor.draft, draft)
+        self.assertEqual(window.poll_generation, generation)
+        self.assertEqual(window.notice_label.get_text(), _('LAN access is allowed.'))
+
+    def test_inactive_firewall_and_canceled_authentication_keep_state_and_drafts(self):
+        window = self.window
+        window.layout_dirty = True
+        before = copy.deepcopy(self.model.data)
+        self.model.prepare_firewall.side_effect = OperationError('firewall_inactive')
+        with mock.patch.object(window, 'ask_lan_peer', return_value='192.168.50.20'):
+            window.firewall_button.emit('clicked')
+            pump(lambda: not window.busy)
+        self.assertEqual(window.notice_label.get_text(), str(OperationError('firewall_inactive')))
+        self.assertFalse(window.notice_box.get_style_context().has_class('error'))
+        self.model.grant_firewall.assert_not_called()
+        self.model.prepare_firewall.side_effect = None
+        self.model.grant_firewall.side_effect = OperationError('firewall_cancelled')
+        with mock.patch.object(window, 'ask_lan_peer', return_value='192.168.50.20'), mock.patch.object(window, 'confirm', return_value=True):
+            window.firewall_button.emit('clicked')
+            pump(lambda: not window.busy)
+        self.assertEqual(self.model.data, before)
+        self.assertTrue(window.layout_dirty)
+        self.assertEqual(self.model.actions, [])
+
+    def test_start_checks_saved_settings_and_old_invalid_address_before_any_service_action(self):
+        window = self.window
+        self.model.data['service']['ActiveState'] = 'inactive'
+        self.model.data['status'] = None
+        window.populate(self.model.load())
+        window.port_spin.set_value(43112)
+        window.toggle()
+        self.assertEqual(self.model.actions, [])
+        self.assertEqual(window.notice_label.get_text(), _('Save local settings before starting sharing.'))
+        self.model.data['config']['settings']['connection'] = {'mode': 'connect', 'address': '0.0.0.0:43111'}
+        window.settings_dirty = False
+        window.populate(self.model.load())
+        window.toggle()
+        self.assertEqual(self.model.actions, [])
+        self.assertEqual(window.notice_label.get_text(), str(OperationError('peer_address_required')))
+
+    def test_waiting_status_explains_each_role_and_links_to_preparation(self):
+        window = self.window
+        state = self.model.poll()
+        state['status']['connection'] = 'connecting'
+        for mode in ('listen', 'connect'):
+            self.model.data['config']['settings']['connection']['mode'] = mode
+            window.info['config']['settings']['connection']['mode'] = mode
+            window.update_status(state)
+            self.assertIn('desktop', window.hero_description.get_text())
+            self.assertTrue(window.connection_button.get_visible())
+            window.navigate('overview')
+            window.connection_button.emit('clicked')
+            self.assertEqual(window.stack.get_visible_child_name(), 'pair')
+        self.assertEqual(self.model.actions, [])
+
+    def test_connection_action_reveals_addresses_and_authorization_in_a_normal_window(self):
+        window = self.window
+        window.resize(1128, 864)
+        window.navigate('overview')
+        window.layout_dirty = True
+        draft = window.editor.draft
+        state = self.model.poll()
+        state['status']['connection'] = 'connecting'
+        window.update_status(state)
+        page = window.stack.get_child_by_name('pair')
+        page.get_vadjustment().set_value(0)
+        window.connection_button.emit('clicked')
+        pump(lambda: page.get_vadjustment().get_value() > 0)
+        viewport = page.get_child()
+        for widget in (window.host_entry, window.local_addresses_box, window.firewall_button):
+            translated = widget.translate_coordinates(viewport, 0, 0)
+            self.assertIsNotNone(translated)
+            self.assertGreaterEqual(translated[1], 0)
+            self.assertLess(translated[1], viewport.get_allocated_height())
+        self.assertTrue(window.layout_dirty)
+        self.assertIs(window.editor.draft, draft)
+        self.assertEqual(self.model.actions, [])
+
+    def test_start_still_requires_pairing_and_input_permissions(self):
+        window = self.window
+        self.model.data['service']['ActiveState'] = 'inactive'
+        self.model.data['status'] = None
+        peer = self.model.data['config'].pop('peer')
+        window.populate(self.model.load())
+        window.toggle()
+        self.assertEqual(window.stack.get_visible_child_name(), 'pair')
+        self.assertEqual(self.model.actions, [])
+        self.model.data['config']['peer'] = peer
+        self.model.data['devices']['uinput_writable'] = False
+        window.populate(self.model.load())
+        window.toggle()
+        self.assertEqual(window.stack.get_visible_child_name(), 'preferences')
+        self.assertEqual(self.model.actions, [])
+
+    def test_start_does_not_discard_or_block_an_unsaved_layout_draft(self):
+        window = self.window
+        draft = window.editor.draft
+        self.model.data['service']['ActiveState'] = 'inactive'
+        self.model.data['status'] = None
+        window.populate(self.model.load())
+        window.editor.draft = draft
+        window.layout_dirty = True
+        window.toggle()
+        pump(lambda: not window.busy)
+        self.assertEqual(self.model.actions, [('running', True)])
+        self.assertTrue(window.layout_dirty)
+        self.assertIs(window.editor.draft, draft)
 
 
 class SavedDeviceModelTests(unittest.TestCase):

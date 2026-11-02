@@ -44,7 +44,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: NiriBridge contributors <174260507+blackdream1890@users.noreply.github.com>
 Homepage: https://github.com/blackdream1890/niri-bridge
-Depends: libc6 (>= {metadata['minimum_glibc_symbol_version']}), libgcc-s1, libei1 (>= 1.0), python3 (>= 3.11), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, openssl, acl, pkexec, systemd, util-linux
+Depends: libc6 (>= {metadata['minimum_glibc_symbol_version']}), libgcc-s1, libei1 (>= 1.0), python3 (>= 3.11), python3-gi, python3-gi-cairo, gir1.2-gtk-3.0, openssl, acl, iproute2, pkexec, systemd, util-linux
 Description: Share keyboard, pointer and touchpad gestures between Wayland desktops
  NiriBridge connects Ubuntu 26.04 computers running Niri 26.04 or KDE Plasma 6.6 Wayland.
  Save multiple paired computers and select one sharing target at a time.

@@ -85,6 +85,9 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         ),
         Command::CheckConfig { config } => {
             let config = bridge::Config::load(&config)?;
+            if let bridge::Connection::Connect { address } = &config.connection {
+                niri_bridge::transport::validate_peer_address(address)?;
+            }
             let identity =
                 niri_bridge::transport::Identity::load(&config.certificate, &config.private_key)?;
             let peer = niri_bridge::pairing::selected_certificate(&config)?;

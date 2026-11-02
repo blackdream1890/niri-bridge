@@ -32,6 +32,12 @@ cargo build --locked --release
 
 管理员安装器的纯逻辑测试和用户服务语法检查：
 
+局域网授权测试模拟网络发现、UFW 和管理员执行，不修改宿主机防火墙。
+覆盖预览摘要绑定、核对期间配置改变、重复授权、外部规则、未启用的 UFW
+及失败恢复。界面回归覆盖可复制本机地址、两种连接方式、未保存设置、
+取消授权和明确的下一步提示。这些检查不表示实机系统认证窗口及防火墙
+行为已通过；须另行取得授权，在目标桌面验证。
+
 ```sh
 python3 -B -m unittest discover -s scripts -p 'test_*.py'
 systemd-analyze --user verify service/niri-bridge.service

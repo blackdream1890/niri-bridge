@@ -82,9 +82,15 @@ descriptor transfer without using input devices. The optimized build passed.
 The security refresh uses rustls 0.23.46, rustls-webpki 0.103.16, Tokio 1.53.3
 and zbus 6.2.0, removing the retired standalone zvariant crates. The current
 locked graph passes `cargo-audit audit --deny warnings`; license notices are
-regenerated and checked. These results describe an uncommitted development
-snapshot. The clean-commit package, upgrade/removal smoke checks, offline source
-rebuild and physical multi-device switching have not yet been completed.
+regenerated and checked. Candidate 1 was then committed as `fb95ccf` and passed
+the clean-commit package pipeline, including archive and Debian installation,
+upgrade/removal smoke checks and an offline corresponding-source rebuild.
+Physical multi-device switching acceptance remains pending.
+
+Candidate 2 adds guided LAN permission review, copyable local addresses,
+unsaved-setting protection and invalid destination checks. Its exact source,
+package and interface checks must be completed again; the first candidate's
+results do not establish verification of these changes.
 
 The target is 1.0.0. Candidate packages do not establish physical acceptance or a
 stable release. Publish 1.0.0 only after the applicable gates pass, using the

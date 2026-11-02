@@ -273,7 +273,7 @@ class ScreenCanvas(Gtk.DrawingArea):
                 cr.fill()
         if self.draft is None:
             self.text(cr, _("Your screens will appear when connected"), 25, height / 2 - 22, width - 50, 14, weight=True)
-            self.text(cr, _("Turn on sharing and wait for the paired computer"), 25, height / 2 + 12, width - 50)
+            self.text(cr, _("Complete the connection settings on both computers."), 25, height / 2 + 12, width - 50)
             return False
         rects = self.draft.rectangles()
         if not self.drag:

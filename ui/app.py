@@ -17,7 +17,7 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, Gio, GLib, Pango, GdkPixbuf
 from i18n import _, N_, configure, get_selection, save_language
-from model import Model, OperationError, endpoint, split_endpoint
+from model import Model, OperationError, endpoint, is_unspecified_address, lan_peer_address, split_endpoint
 from canvas import ScreenCanvas, BOUNDARY_NAMES, MAX_EDGES, desktop_edges
 from tray import Tray
 
@@ -202,8 +202,10 @@ class Window(Gtk.ApplicationWindow):
         actions = box(False, 12)
         self.toggle_button = button(_("Start sharing"), self.toggle, True, 'media-playback-start-symbolic')
         self.release_button = button(_("Return to this computer"), self.release_control, icon='go-home-symbolic')
+        self.connection_button = button(_("Check connection"), lambda *_unused: self.navigate_connection(), icon='network-wired-symbolic')
         actions.pack_start(self.toggle_button, False, False, 0)
         actions.pack_start(self.release_button, False, False, 0)
+        actions.pack_start(self.connection_button, False, False, 0)
         self.spinner = Gtk.Spinner()
         actions.pack_end(self.spinner, False, False, 4)
         hero.pack_start(actions, False, False, 0)
@@ -325,6 +327,7 @@ class Window(Gtk.ApplicationWindow):
         page.pack_start(horizontal(*panels), False, False, 0)
         page.pack_start(text(_("Export a pairing file on each computer and import it on the other. Verify matching fingerprints before enabling shared input and screen-setting synchronization."), 'muted'), False, False, 0)
         network = card(_("Connection method"), _("One computer waits for a connection. The other connects to its address."))
+        self.network_card = network
         self.connection_mode = Gtk.ComboBoxText()
         self.connection_mode.append('connect', _("Connect to the other computer"))
         self.connection_mode.append('listen', _("Wait for the other computer to connect"))
@@ -350,6 +353,22 @@ class Window(Gtk.ApplicationWindow):
         network.pack_start(address_row, False, False, 0)
         self.address_hint = text('', 'muted')
         network.pack_start(self.address_hint, False, False, 0)
+        network.pack_start(Gtk.Separator(), False, False, 0)
+        network.pack_start(text(_("Local address"), 'section-title'), False, False, 0)
+        self.local_addresses_box = box(True, 6)
+        network.pack_start(self.local_addresses_box, False, False, 0)
+        self.local_port_label = text('', 'muted')
+        network.pack_start(self.local_port_label, False, False, 0)
+        self.firewall_box = box(True, 8)
+        self.firewall_button = button(_("Allow LAN connection…"), self.allow_lan_connection, icon='network-wired-symbolic')
+        self.firewall_button.set_halign(Gtk.Align.START)
+        self.firewall_box.pack_start(self.firewall_button, False, False, 0)
+        self.firewall_hint = text('', 'muted')
+        self.firewall_box.pack_start(self.firewall_hint, False, False, 0)
+        network.pack_start(self.firewall_box, False, False, 0)
+        self.firewall_box.show_all()
+        self.firewall_box.set_no_show_all(True)
+        self.firewall_box.hide()
         self.network_save = button(_("Save local settings"), self.save_settings, True)
         network.pack_end(self.network_save, False, False, 0)
         page.pack_start(network, False, False, 0)
@@ -493,13 +512,35 @@ class Window(Gtk.ApplicationWindow):
             context = nav.get_style_context()
             (context.add_class if key == name else context.remove_class)('selected')
 
+    def navigate_connection(self, focus_address=False):
+        self.navigate('pair')
+        attempts = 0
+        def reveal():
+            nonlocal attempts
+            if not self.alive or self.stack.get_visible_child_name() != 'pair':
+                return False
+            self.check_resize()
+            page = self.stack.get_child_by_name('pair')
+            target = self.host_entry if focus_address else self.network_card
+            coordinates = target.translate_coordinates(page.get_child(), 0, 0)
+            adjustment = page.get_vadjustment()
+            if coordinates is None or adjustment.get_page_size() <= 0:
+                attempts += 1
+                return attempts < 10
+            position = adjustment.get_value() + coordinates[1] - 12
+            adjustment.set_value(max(adjustment.get_lower(), min(position, adjustment.get_upper() - adjustment.get_page_size())))
+            if focus_address:
+                self.host_entry.grab_focus()
+            return False
+        GLib.timeout_add(30, reveal)
+
     def notice(self, message, error=False):
         self.notice_label.set_text(str(message))
         context = self.notice_box.get_style_context()
         (context.add_class if error else context.remove_class)('error')
         self.notice_revealer.set_reveal_child(True)
 
-    def work(self, caption, function, success=None):
+    def work(self, caption, function, success=None, failure=None):
         if self.busy:
             return
         self.busy = True
@@ -518,7 +559,10 @@ class Window(Gtk.ApplicationWindow):
                 self.busy = False
                 self.spinner.stop()
                 if error:
-                    self.notice(str(error), True)
+                    if failure:
+                        failure(error)
+                    else:
+                        self.notice(str(error), True)
                 elif success:
                     success(result)
                 else:
@@ -586,6 +630,20 @@ class Window(Gtk.ApplicationWindow):
         self.peer_combo.set_active_id(chosen if chosen in self.paired_devices else active_fingerprint)
         current = self.paired_devices.get(active_fingerprint)
         self.current_peer_label.set_text(_("Selected for sharing: {computer}").format(computer=current['name']) if current else _("No computer is selected. Import a pairing file to get started."))
+        for child in self.local_addresses_box.get_children():
+            self.local_addresses_box.remove(child)
+        network = info.get('network') or {}
+        addresses = network.get('addresses', [])
+        for item in addresses:
+            row = box(False, 10)
+            row.pack_start(text(_("{address} · {interface}").format(**item)), True, True, 0)
+            row.pack_end(button(_("Copy local address"), lambda _unused, address=item['address']: self.copy_local_address(address), icon='edit-copy-symbolic'), False, False, 0)
+            self.local_addresses_box.pack_start(row, False, False, 0)
+        if not addresses:
+            self.local_addresses_box.pack_start(text(_("No physical LAN IPv4 address is available. Other network connections may still work."), 'muted'), False, False, 0)
+        self.local_addresses_box.show_all()
+        port = split_endpoint(config['settings']['connection']['address'])[1] if config else network.get('port')
+        self.local_port_label.set_text(_("Saved TCP port: {port}").format(port=port) if port else _("Save the connection settings to set the TCP port."))
         if config and not self.settings_dirty:
             self.settings_revision = config['revision']
             settings = config['settings']
@@ -673,6 +731,8 @@ class Window(Gtk.ApplicationWindow):
         badge_class = 'waiting'
         if self.poll_data.get('unmanaged'):
             title, description, badge = _('A manually started instance is running'), _('Stop the manually started instance before managing sharing through the user service.'), _('Manual instance')
+        elif status and status.get('reason') == 'peer_address_required':
+            title, description, badge = _("Enter the other computer's address"), str(OperationError('peer_address_required')), _("Address required")
         elif not active:
             title = _("Sharing is paused") if service.get('ActiveState') != 'failed' else _("Sharing could not start")
             description = _("Turn sharing on to move the pointer between computers.") if title == _("Sharing is paused") else _("Check the pairing files, connection address and input device permissions.")
@@ -702,7 +762,11 @@ class Window(Gtk.ApplicationWindow):
         elif status.get('reason') == 'authentication_failed':
             title, description, badge = _("Pairing verification failed"), _("Check the pairing files and device names on both computers."), _("Verify pairing")
         else:
-            title, description, badge = _("Waiting for the other computer"), _("Check that sharing is on at the other computer and that its address is reachable."), _("Waiting for connection")
+            title, badge = _("Waiting for the other computer"), _("Waiting for connection")
+            if config and config['settings']['connection']['mode'] == 'listen':
+                description = _("On {computer}, select this computer and connect to its local address and saved TCP port. Open Devices & pairing here for the address and LAN access option.").format(computer=peer_name)
+            else:
+                description = _("Check that {computer} is waiting for a connection. Copy its Local address and use the same TCP port. If it still does not connect, check network reachability and LAN access on that computer.").format(computer=peer_name)
         self.hero_title.set_text(title)
         self.hero_description.set_text(description)
         self.header_badge.set_text(badge)
@@ -746,6 +810,8 @@ class Window(Gtk.ApplicationWindow):
         self.toggle_button.set_image(Gtk.Image.new_from_icon_name('media-playback-pause-symbolic' if active else 'media-playback-start-symbolic', Gtk.IconSize.BUTTON))
         self.toggle_button.set_sensitive(bool(config) and not unmanaged and not self.busy and not configuring and status.get('reason') != 'config_changed')
         self.release_button.set_sensitive(not self.busy and status.get('connection') == 'connected' and status.get('role') != 'local')
+        self.connection_button.set_visible(bool(config and status.get('connection') != 'connected'))
+        self.connection_button.set_sensitive(not self.busy)
         draft = self.editor.draft
         layout_error = draft.validation_error() if draft else None
         valid_layout = draft is not None and layout_error is None
@@ -766,6 +832,16 @@ class Window(Gtk.ApplicationWindow):
         chosen = self.paired_devices.get(self.peer_combo.get_active_id())
         self.peer_combo.set_sensitive(peer_management and bool(self.paired_devices))
         self.peer_switch.set_sensitive(bool(peer_management and chosen and not chosen['active']))
+        listening = self.connection_mode.get_active_id() == 'listen'
+        saved_listening = bool(config and config['settings']['connection']['mode'] == 'listen')
+        self.firewall_box.set_visible(listening)
+        self.firewall_button.set_sensitive(bool(peer_management and saved_listening and config.get('peer') and not self.settings_dirty))
+        if self.settings_dirty:
+            self.firewall_hint.set_text(_("Save local settings before allowing LAN access."))
+        elif not config or not config.get('peer'):
+            self.firewall_hint.set_text(_("Pair with the other computer before allowing its LAN access."))
+        else:
+            self.firewall_hint.set_text(_("Use this on the computer waiting for a connection. Copy the other computer's Local address to allow only that LAN IPv4 address."))
         self.permission_button.set_sensitive(bool(config and not self.busy and not unmanaged))
         self.autostart.set_sensitive(bool(config and not unmanaged and not self.busy and status.get('reason') != 'config_changed'))
         for combo in self.language_combos:
@@ -792,6 +868,16 @@ class Window(Gtk.ApplicationWindow):
             if not config or not config.get('peer'):
                 self.navigate('pair')
                 self.notice(_("Import the other computer's pairing file first."))
+                return
+            if self.settings_dirty:
+                self.navigate_connection()
+                self.notice(_("Save local settings before starting sharing."), True)
+                return
+            try:
+                self.current_settings()
+            except OperationError as error:
+                self.navigate_connection(focus_address=True)
+                self.notice(str(error), True)
                 return
             if not self.permissions_ready():
                 self.navigate('preferences')
@@ -920,12 +1006,16 @@ class Window(Gtk.ApplicationWindow):
 
     def connection_mode_changed(self, *_unused):
         mode = self.connection_mode.get_active_id()
+        if not self.updating and mode == 'connect' and is_unspecified_address(self.host_entry.get_text()):
+            self.host_entry.set_text('')
+            self.notice(str(OperationError('peer_address_required')), True)
         self.address_label.set_text(_("Local listening address") if mode == 'listen' else _("Other computer's address"))
         self.address_hint.set_text(_("Normally use 0.0.0.0 here. The other computer connects using this computer's LAN address.") if mode == 'listen' else _("Enter the other computer's LAN address or hostname. Both computers must use the same port."))
         self.settings_changed()
 
     def current_settings(self):
-        return {'connection': {'mode': self.connection_mode.get_active_id(), 'address': endpoint(self.host_entry.get_text(), self.port_spin.get_value_as_int())},
+        mode = self.connection_mode.get_active_id()
+        return {'connection': {'mode': mode, 'address': endpoint(self.host_entry.get_text(), self.port_spin.get_value_as_int(), mode)},
                 'native_touchpads': self.gesture_check.get_active(),
                 'activity_devices': [d['path'] for check, d in self.device_checks if check.get_active()]}
 
@@ -975,6 +1065,83 @@ class Window(Gtk.ApplicationWindow):
         if not self.confirm(_("Allow access to the selected input devices?"), _("The system will ask for administrator authentication. Access is limited to the selected input devices and virtual input interface."), _("Continue")):
             return
         self.work(_("Waiting for administrator authentication…"), self.model.grant_devices, lambda info: (self.populate(info), self.notice(_("Device permissions updated."))))
+
+    def copy_local_address(self, address):
+        Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(address, -1)
+        self.notice(_("Local IPv4 address copied. Enter it on the other computer and use the saved TCP port shown here."))
+
+    def ask_lan_peer(self, name):
+        dialog = Gtk.Dialog(title=_("Allow LAN connection"), transient_for=self, modal=True)
+        css(dialog, 'niri-bridge')
+        dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        accept = dialog.add_button(_("Check connection"), Gtk.ResponseType.ACCEPT)
+        accept.set_sensitive(False)
+        content = box(True, 12, 'page')
+        content.set_size_request(470, -1)
+        content.pack_start(text(_("Enter the current LAN IPv4 address of {computer}.").format(computer=name), 'section-title'), False, False, 0)
+        content.pack_start(text(_("On that computer, open Devices & pairing and copy its Local address. Enter only the IPv4 address, without a port."), 'muted'), False, False, 0)
+        entry = Gtk.Entry()
+        entry.set_placeholder_text('192.168.1.20')
+        entry.set_activates_default(True)
+        content.pack_start(entry, False, False, 0)
+        validation = text('', 'muted')
+        content.pack_start(validation, False, False, 0)
+        def changed(*_unused):
+            try:
+                lan_peer_address(entry.get_text())
+                valid = True
+            except OperationError:
+                valid = False
+            accept.set_sensitive(valid)
+            validation.set_text(str(OperationError('firewall_peer_invalid')) if entry.get_text() and not valid else '')
+        entry.connect('changed', changed)
+        dialog.get_content_area().pack_start(content, True, True, 0)
+        dialog.set_default_response(Gtk.ResponseType.ACCEPT)
+        dialog.show_all()
+        entry.grab_focus()
+        result = dialog.run()
+        peer = entry.get_text()
+        dialog.destroy()
+        if result == Gtk.ResponseType.ACCEPT:
+            try:
+                return lan_peer_address(peer)
+            except OperationError as error:
+                self.notice(str(error), True)
+        return None
+
+    def firewall_error(self, error):
+        self.notice(str(error), error.code not in ('firewall_inactive', 'firewall_cancelled'))
+
+    def allow_lan_connection(self, *_unused):
+        config = self.info.get('config') if self.info else None
+        if self.busy:
+            return
+        if self.settings_dirty:
+            self.notice(_("Save local settings before allowing LAN access."), True)
+            return
+        if not config or not config.get('peer'):
+            self.notice(_("Pair with the other computer before allowing its LAN access."), True)
+            return
+        if config['settings']['connection']['mode'] != 'listen' or self.connection_mode.get_active_id() != 'listen':
+            self.notice(str(OperationError('firewall_listen_required')), True)
+            return
+        peer = self.ask_lan_peer(config['peer']['name'])
+        if peer is None:
+            return
+        self.work(_("Checking LAN connection permission…"),
+                  lambda: self.model.prepare_firewall(peer, config['revision'], config['peer']['fingerprint']),
+                  self.review_firewall, self.firewall_error)
+
+    def review_firewall(self, prepared):
+        if self.settings_dirty:
+            self.notice(_("Save local settings before allowing LAN access."), True)
+            return
+        plan = prepared['plan']
+        description = _("{peer} → this computer {local}, TCP {port}\nNetwork interface: {interface}\n\nThe system will ask for administrator authentication. Only this LAN connection will be allowed. If sharing is already on, the computers may connect immediately.").format(**plan)
+        if not self.confirm(_("Allow LAN access for {computer}?").format(computer=prepared['name']), description, _("Allow LAN access")):
+            return
+        self.work(_("Waiting for administrator authentication…"), lambda: self.model.grant_firewall(prepared),
+                  lambda _result: self.notice(_("LAN access is allowed.")), self.firewall_error)
 
     def initialize(self, *_unused):
         name = self.setup_name.get_text().strip()

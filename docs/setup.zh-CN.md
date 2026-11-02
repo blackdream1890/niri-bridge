@@ -15,7 +15,7 @@ Ubuntu 运行依赖为 `python3-gi`、`python3-gi-cairo` 和 `gir1.2-gtk-3.0`。
 Ubuntu 推荐下载并校验 `.deb` 发行包，使用系统软件包安装器打开，或执行：
 
 ```sh
-sudo apt install ./niri-bridge-1.0.0-rc.1-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-1.0.0-rc.2-ubuntu26.04-amd64.deb
 ```
 
 随后从应用启动器打开 NiriBridge，以桌面用户身份完成设置。软件包会安装依赖，将发行文件放在 `/usr/lib/niri-bridge`，并在用户下次打开应用时安全更新其个人安装。软件包维护本身不重启正在共享的会话。旧压缩包安装生成且未经修改的应用入口会转到这个更新入口；自定义启动器会保留。如果修改过启动器，请打开 `/usr/bin/niri-bridge-ui` 应用软件包更新。
@@ -23,7 +23,7 @@ sudo apt install ./niri-bridge-1.0.0-rc.1-ubuntu26.04-amd64.deb
 压缩包或源码安装需要先安装运行依赖：
 
 ```sh
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec libei1
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl iproute2 pkexec libei1
 ```
 
 预编译发行包经 `SHA256SUMS` 校验并完整解压后，以桌面用户运行安装程序，不加 sudo：
@@ -94,11 +94,13 @@ niri-bridge-ui --language zh_CN
 
 ## 网络与输入权限
 
-一台选择等待另一台连接，通常监听地址为 `0.0.0.0`；另一台选择主动连接并填写对端可达的局域网地址。默认使用 TCP 42420。
+一台选择等待另一台连接，通常监听地址为 `0.0.0.0`；另一台选择主动连接并填写对端可达的局域网地址。默认使用 TCP 42420。`0.0.0.0` 和 `::` 用于本机监听，不能用作对方地址。
 
-在偏好设置中选择实体键盘、鼠标和触摸板。已配置但暂时断开的设备会保留选择，不会被静默移除。原生手势需要选中触摸板稳定路径并开启“共享原生手势”。
+若等待连接的电脑使用 UFW，先保存连接设置，再到“设备与配对”点击“允许局域网连接…”。输入已配对电脑当前的私有 IPv4 地址，核对来源地址、本机地址和 TCP 端口后，再完成系统管理员认证。授权仅限该来源、本机地址、网卡和端口，保留已有输入权限及配对记录；此操作不会启用尚未开启的 UFW。共享已经运行时，放行后可能立即连接；尚未运行时，由你在准备好后点击“开始共享”。
 
-“授权访问输入设备”使用现有管理员安装程序。先检查授权范围，再完成操作系统的管理员认证。权限仅针对选定设备和 uinput，通过 `uaccess` 授予活跃桌面用户；共享程序以普通用户运行，不加入整个 input 用户组。
+在偏好设置中选择实体键盘、鼠标和触摸板。已配置但暂时断开的设备会保留选择，不会被静默移除。原生手势需要选中触摸板稳定路径并开启“共享本机触摸板的原生手势”。
+
+“授予设备访问”使用现有管理员安装程序。先检查授权范围，再完成操作系统的管理员认证。权限仅针对选定设备和 uinput，通过 `uaccess` 授予活跃桌面用户；共享程序以普通用户运行，不加入整个 input 用户组。
 
 命令行准备方式：
 
@@ -107,7 +109,7 @@ python3 scripts/device-access.py plan --config ~/.config/niri-bridge/config.toml
 sudo python3 scripts/device-access.py install --plan ~/.config/niri-bridge/device-access.json
 ```
 
-若监听端启用了 UFW，生成计划时加入 `--allow-from OTHER_COMPUTER_LAN_IPV4`，仅允许指定的对端私有 IPv4 访问 TCP 42420。安装程序保留防火墙启用状态，不对整个网段开放。已有安装计划与新范围不同时会拒绝覆盖，应先检查并调整授权安装范围。
+旧版合并式输入授权命令仍支持 `--allow-from OTHER_COMPUTER_LAN_IPV4`，使用标准 TCP 42420 端口。已有输入计划与新范围不同时会拒绝覆盖。对已安装的电脑追加网络访问权限时，使用独立的“允许局域网连接…”入口，无需替换输入授权。
 
 托管规则位于 `/etc/udev/rules.d/71-niri-bridge-input.rules`，受保护的恢复记录位于 `/var/lib/niri-bridge/device-access.json`。
 

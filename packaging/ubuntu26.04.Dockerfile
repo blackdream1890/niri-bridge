@@ -57,3 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libei1 kwin-way
 RUN apt-get update && apt-get install -y --no-install-recommends kwin-common \
     && setcap -r /usr/bin/kwin_wayland \
     && rm -rf /var/lib/apt/lists/*
+
+# Read-only LAN address discovery and route validation use iproute2.
+RUN apt-get update && apt-get install -y --no-install-recommends iproute2 \
+    && rm -rf /var/lib/apt/lists/*

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-rc.2
+
+- Add a separate LAN firewall authorization action in Devices & pairing. Review one private IPv4 peer and the saved listening port before administrator authentication; retain existing input access and paired identities.
+- Bind the reviewed firewall plan to its exact bytes and revalidate its route before applying a narrow UFW rule. Preserve disabled UFW and external rules, and track only rules created by this action.
+
+- Prevent saving wildcard listening addresses as the other computer's connection address. Switching from waiting to connecting clears an unspecified address and asks for a reachable IP or hostname.
+- Reject unspecified IPv4/IPv6 destinations before opening a network connection and show an actionable address hint. Existing configurations remain editable, while wildcard listening, DNS, loopback and normal IPv4/IPv6 destinations remain supported.
+- Release the settings lock on failed preparation as well as completed edits, including when a concurrently spawned process inherited the file descriptor.
+
 ## 1.0.0-rc.1
 
 - Refresh the security baseline to rustls 0.23.46, rustls-webpki 0.103.16 and Tokio 1.53.3. Migrate to maintained zbus 6 and its integrated wire types instead of the retired standalone zvariant crates. Retain the zero-warning dependency audit gate.

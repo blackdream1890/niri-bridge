@@ -6,6 +6,15 @@ English · [简体中文](design.zh-CN.md)
 
 The Rust service owns input capture, authenticated transport, destination injection, recovery and configuration synchronization. The Python/GTK desktop interface owns user interaction and communicates through a private Unix control socket. Opening the interface leaves sharing stopped until Start sharing is selected. Window close hides to the tray, while tray quit waits for the managed backend to stop. Changing the interface language retains the sharing state.
 
+Connection preparation belongs in the interface: provide actual copyable local
+LAN addresses, reject listening wildcards as peer destinations, and require
+unsaved connection settings to be saved before starting. Waiting and failed
+states point to the relevant connection settings without guessing a network
+failure's cause. Input access and LAN access have distinct review scopes. LAN
+authorization previews one private IPv4 peer, the saved listening port and the
+actual route; administrator authentication applies that frozen scope only.
+Neither authorization action silently changes pairing or starts sharing.
+
 | Input | Source | Destination |
 | --- | --- | --- |
 | Keyboard | Selected physical evdev events; a Wayland surface owns focus and inhibits local shortcuts | uinput keyboard, processed by the destination Niri session and input method |

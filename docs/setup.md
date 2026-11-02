@@ -13,7 +13,7 @@ The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tr
 For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
 
 ```sh
-sudo apt install ./niri-bridge-1.0.0-rc.1-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-1.0.0-rc.2-ubuntu26.04-amd64.deb
 ```
 
 Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.
@@ -21,10 +21,10 @@ Open NiriBridge from the application launcher to complete setup as your desktop 
 For a portable archive or source checkout, install the runtime dependencies with:
 
 ```sh
-sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl pkexec libei1
+sudo apt install python3 python3-gi python3-gi-cairo gir1.2-gtk-3.0 openssl acl iproute2 pkexec libei1
 ```
 
-Run the NiriBridge installer as your desktop user, without sudo. Administrator authentication is requested separately when granting input-device access. The backend build needs a C compiler and the Rust toolchain pinned by the repository. The `openssl` command is used to inspect and normalize public pairing files.
+Run the NiriBridge installer as your desktop user, without sudo. Administrator authentication is requested separately when granting input-device or LAN access. The backend build needs a C compiler and the Rust toolchain pinned by the repository. The `openssl` command is used to inspect and normalize public pairing files; `iproute2` supplies read-only LAN address and route information.
 
 For the prebuilt release archive, verify `SHA256SUMS`, extract the complete archive, and run:
 
@@ -120,9 +120,11 @@ the pre-upgrade configuration backup and the retained original pairing files.
 
 ## Connection and input permissions
 
-Choose **Wait for the other computer to connect** on one computer. Its usual listening address is `0.0.0.0`. On the other, choose **Connect to the other computer** and enter an address reachable over the LAN. Both use TCP port 42420 by default.
+Choose **Wait for the other computer to connect** on one computer. Its usual listening address is `0.0.0.0`. On the other, choose **Connect to the other computer** and enter an address reachable over the LAN. Both use TCP port 42420 by default. `0.0.0.0` and `::` are listening addresses; they cannot identify the other computer.
 
-Select the physical keyboard, mouse and touchpad devices in Preferences. A disconnected configured device remains in the selection so it is not silently removed. Native touchpad gestures require the touchpad's stable path to be selected and **Share native gestures** enabled.
+If the listening computer uses UFW, save its connection settings, then choose **Allow LAN connection…** in **Devices & pairing**. Enter the paired computer's current private IPv4 address. Review the source address, this computer's address and TCP port before approving administrator authentication. The permission applies only to that source, local address, network interface and port; existing input permissions and pairings are retained. UFW is never enabled by this action. If sharing is already running, allowing the connection can connect the pair immediately; otherwise click **Start sharing** when ready.
+
+Select the physical keyboard, mouse and touchpad devices in Preferences. A disconnected configured device remains in the selection so it is not silently removed. Native touchpad gestures require the touchpad's stable path to be selected and **Share native gestures from this computer's touchpad** enabled.
 
 The **Allow device access** action uses the existing administrator installer. Review the scope before completing the operating system's administrator authentication. Permissions are limited to selected device identities and uinput, using `uaccess` for the active desktop user; the program does not run as root or add the user to the entire input group.
 
@@ -133,7 +135,7 @@ python3 scripts/device-access.py plan --config ~/.config/niri-bridge/config.toml
 sudo python3 scripts/device-access.py install --plan ~/.config/niri-bridge/device-access.json
 ```
 
-If the listening computer's UFW is active, prepare its plan with `--allow-from OTHER_COMPUTER_LAN_IPV4` to allow TCP 42420 from that one private IPv4 address. The installer preserves firewall enablement and does not open the port to an entire network. Existing installations with a different authorization plan are deliberately refused; review and update the installation scope before changing it.
+The older combined command-line input plan also accepts `--allow-from OTHER_COMPUTER_LAN_IPV4` for the standard TCP 42420 port. Existing input plans with a different scope are deliberately refused. Use the separate **Allow LAN connection…** action to add network access to an existing installation without replacing its input authorization.
 
 The managed rule is `/etc/udev/rules.d/71-niri-bridge-input.rules`. Protected recovery information is stored in `/var/lib/niri-bridge/device-access.json`.
 

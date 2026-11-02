@@ -136,7 +136,17 @@ pub fn view(path: &Path) -> Result<View> {
         peer,
     })
 }
-fn lock(path: &Path) -> Result<File> {
+struct EditGuard(File);
+impl Drop for EditGuard {
+    fn drop(&mut self) {
+        // A concurrently spawned child can inherit the open file description
+        // before exec. Release explicitly on every path, including failed edits.
+        unsafe {
+            libc::flock(self.0.as_raw_fd(), libc::LOCK_UN);
+        }
+    }
+}
+fn lock(path: &Path) -> Result<EditGuard> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -154,7 +164,7 @@ fn lock(path: &Path) -> Result<File> {
         unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
         "settings_busy"
     );
-    Ok(file)
+    Ok(EditGuard(file))
 }
 fn atomic(path: &Path, text: &str) -> Result<()> {
     let mut temporary = tempfile::NamedTempFile::new_in(path.parent().context("config_invalid")?)?;
@@ -171,7 +181,7 @@ pub struct Prepared {
     next: String,
     pub before_revision: String,
     pub after_revision: String,
-    _lock: File,
+    _lock: EditGuard,
     committed: bool,
     finished: bool,
     target_outputs: Vec<String>,
@@ -245,11 +255,6 @@ impl Drop for Prepared {
             && revision(&self.path).is_ok_and(|r| r == self.after_revision)
         {
             let _ = atomic(&self.path, &self.before);
-        }
-        // Closing our descriptor alone is not sufficient if a concurrent spawn
-        // inherited the open file description before exec closed its copy.
-        unsafe {
-            libc::flock(self._lock.as_raw_fd(), libc::LOCK_UN);
         }
     }
 }
@@ -353,6 +358,9 @@ fn settings(doc: &mut DocumentMut, s: &Settings) -> Result<()> {
                 .is_some_and(|p| p > 0),
         "address_invalid"
     );
+    if let Connection::Connect { address } = &s.connection {
+        transport::validate_peer_address(address)?;
+    }
     pairing::write_connection(doc, &s.connection);
     doc["native_touchpads"] = value(s.native_touchpads);
     let mut array = toml_edit::Array::new();
@@ -450,6 +458,7 @@ pub fn error_code(error: &anyhow::Error) -> &'static str {
         "input_selection_empty",
         "input_path_invalid",
         "address_invalid",
+        "peer_address_required",
         "pair_same_device",
         "peer_not_found",
         "peer_certificate_changed",
@@ -618,9 +627,20 @@ mod tests {
         let (_directory, path) = config();
         let prepared = Prepared::edit(&path, &revision(&path).unwrap(), |_| Ok(())).unwrap();
         // A concurrent fork can retain the same open file description until exec.
-        let inherited = prepared._lock.try_clone().unwrap();
+        let inherited = prepared._lock.0.try_clone().unwrap();
         assert!(lock(&path).is_err());
         prepared.finish();
+        assert!(lock(&path).is_ok());
+        drop(inherited);
+    }
+    #[test]
+    fn edit_guard_releases_the_lock_before_a_transaction_has_been_prepared() {
+        let (_directory, path) = config();
+        let guard = lock(&path).unwrap();
+        let inherited = guard.0.try_clone().unwrap();
+        assert!(lock(&path).is_err());
+        // Failed preparation drops this guard without constructing Prepared.
+        drop(guard);
         assert!(lock(&path).is_ok());
         drop(inherited);
     }
@@ -682,6 +702,41 @@ mod tests {
             fs::read_to_string(path.with_extension("before-ui.toml")).unwrap(),
             original
         );
+    }
+    #[test]
+    fn wildcard_peer_addresses_are_rejected_without_overwriting_saved_settings() {
+        let (_directory, path) = config();
+        let original = fs::read(&path).unwrap();
+        for address in ["0.0.0.0:42420", "[::]:42420", "[0:0:0:0:0:0:0:0]:42420"] {
+            let mut settings = view(&path).unwrap().settings;
+            settings.connection = Connection::Connect {
+                address: address.into(),
+            };
+            let error = save(
+                &path,
+                SaveRequest {
+                    revision: revision(&path).unwrap(),
+                    settings,
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error_code(&error), "peer_address_required");
+            assert!(fs::read(&path).unwrap() == original);
+        }
+        for address in ["0.0.0.0:42420", "[::]:42420"] {
+            let mut settings = view(&path).unwrap().settings;
+            settings.connection = Connection::Listen {
+                address: address.into(),
+            };
+            save(
+                &path,
+                SaveRequest {
+                    revision: revision(&path).unwrap(),
+                    settings,
+                },
+            )
+            .unwrap();
+        }
     }
     #[test]
     fn pairing_binds_the_reviewed_fingerprint_and_never_imports_a_private_key() {
