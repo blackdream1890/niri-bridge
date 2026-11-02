@@ -4,6 +4,7 @@
 import argparse
 from pathlib import Path
 import sys
+import tomllib
 from unittest import mock
 
 from app import Application, GLib, Gtk
@@ -27,6 +28,7 @@ def main():
     for name in ('overview', 'layout', 'pair', 'preferences'):
         (args.output / (name + '.png')).unlink(missing_ok=True)
     model = FakeModel()
+    model.data['version'] = tomllib.loads((Path(__file__).resolve().parent.parent / 'Cargo.toml').read_text())['package']['version']
     draft = LayoutDraft(model.data['status']['local'], model.data['status']['peer'])
     draft.add_connection()
     for role in ('local', 'peer'):
@@ -39,7 +41,7 @@ def main():
         if window.info is None or window.busy:
             return True
         window.connection_combo.set_active_id(draft.selected_id)
-        window.resize(1120, 1080)
+        window.resize(1120, 1320)
         window.render_dir = args.output
         GLib.timeout_add(300, window.render_pages)
         GLib.timeout_add(100, done)

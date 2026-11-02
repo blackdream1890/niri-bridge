@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0
+
+- First stable release for Ubuntu 26.04 on Linux x86_64, with physically accepted Niri sharing and saved-device use. KDE Plasma 6.6 Wayland retains earlier basic keyboard/pointer acceptance and isolated KWin/Portal coverage; its hardware scenarios were not revalidated in the 1.0 rollout.
+- Retain multiple paired computers, certificates, fingerprints, connection settings and screen connections. Select one sharing target at a time; switching stops sharing until an explicit Start sharing.
+- Provide copyable local LAN addresses, reviewed per-peer firewall authorization and actionable connection preparation. Preserve existing input access, paired identities and firewall state; block invalid wildcard destinations and starting with unsaved settings.
+- Ship the Ubuntu amd64 Debian package, portable archive, corresponding source with locked dependencies, and SHA256SUMS through the checked-source release pipeline.
+- Retain the documented limits for certificate renewal, extended input and suspend scenarios, unvalidated platforms and simultaneous multi-computer sharing.
+
 ## 1.0.0-rc.2
 
 - Add a separate LAN firewall authorization action in Devices & pairing. Review one private IPv4 peer and the saved listening port before administrator authentication; retain existing input access and paired identities.

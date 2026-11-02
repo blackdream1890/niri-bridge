@@ -13,7 +13,7 @@ The desktop interface uses the system Python, GTK 3, PyGObject and Cairo. Its tr
 For the easiest Ubuntu installation, download and verify the `.deb` release. Open it with the system package installer, or run:
 
 ```sh
-sudo apt install ./niri-bridge-1.0.0-rc.2-ubuntu26.04-amd64.deb
+sudo apt install ./niri-bridge-1.0.0-ubuntu26.04-amd64.deb
 ```
 
 Open NiriBridge from the application launcher to complete setup as your desktop user. The package supplies runtime dependencies, keeps the shared release in `/usr/lib/niri-bridge`, and applies updates to each user's installation when the application is next opened. Package maintenance never restarts a running sharing session. An unchanged launcher from an older portable installation is redirected to this update entry point; customized launchers are preserved. If you customized yours, open `/usr/bin/niri-bridge-ui` to apply the package update.
@@ -210,8 +210,8 @@ The installer preserves externally changed rules. It restores saved ACLs only fo
 
 - Linux keyboard codes 1–255 are supported; higher-numbered keys are not yet supported.
 - Native slot-based touchpads and three/four-finger gestures are validated on the initial hardware. Pinch combinations, cross-computer dragging and long suspend recovery need broader testing.
-- The first topology is two Niri computers. Other compositors, platforms and multi-computer graphs are not yet validated.
-- Certificate renewal is not automated. This checkout is a 1.0 release candidate under GPL-3.0-or-later; see the saved-device acceptance checklist.
+- One selected pair shares input at a time. Niri has current physical acceptance. KDE Plasma Wayland retains earlier basic keyboard/pointer acceptance and isolated KWin/Portal coverage; its hardware scenarios were not revalidated in the 1.0 rollout. Other compositors, platforms and simultaneous multi-computer graphs are not validated.
+- Certificate renewal is not automated. Version 1.0.0 is released under GPL-3.0-or-later; see the saved-device acceptance record and remaining test limits.
 
 ## Upgrade and uninstall
 

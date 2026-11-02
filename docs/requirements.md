@@ -19,12 +19,12 @@ English · [简体中文](requirements.zh-CN.md)
 
 ## Configuration and community scope
 
-The next release must retain multiple explicitly paired computers and their
-individual connection and screen settings, with one selected sharing target at a
-time. Adding a computer must preserve earlier certificates and fingerprints.
-See [saved-device requirements and 1.0 gates](multi-device-pairing.md) for scope,
-switching decisions and acceptance. These requirements are under implementation;
-they are not completed real-device acceptance.
+Version 1.0 retains multiple explicitly paired computers and their individual
+connection and screen settings, with one selected sharing target at a time.
+Adding a computer preserves earlier certificates and fingerprints. See the
+[saved-device requirements and acceptance record](multi-device-pairing.md) for
+scope, switching decisions and the distinction between physical acceptance,
+isolated tests and remaining coverage.
 
 Hostnames, addresses, output names, resolution, scaling and physical devices must be configurable or discovered from actual capabilities. Examples use generic names and fictional addresses. Personal acceptance records are kept in the ignored `.local/` directory.
 

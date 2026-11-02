@@ -51,7 +51,7 @@ Absolute pointer placement applies the inverse of the destination output transfo
 
 ## Desktop management
 
-The next saved-device extension retains one transport peer at a time while
+Saved-device management retains one transport peer at a time while
 keeping other explicitly trusted computers and their individual connection and
 screen settings. See the [implementation and acceptance plan](multi-device-pairing.md).
 

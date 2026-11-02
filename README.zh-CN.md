@@ -6,7 +6,7 @@
 
 NiriBridge 在两台运行 Niri 或 KDE Plasma 的 Ubuntu Wayland 电脑之间共享键盘、鼠标和触摸板，各自继续渲染本地桌面。指针穿过设置好的屏幕边缘后，键盘自动跟随；三指工作区切换和四指总览手势也在当前目标电脑执行。
 
-**1.0 候选版支持保存多个已配对设备。** 每台分别保留证书、指纹、地址和屏幕连接。
+**1.0 正式版支持保存多个已配对设备。** 每台分别保留证书、指纹、地址和屏幕连接。
 在“设备与配对”选择一个共享目标；切换会先停止共享，之后由用户点击“开始共享”。
 添加新设备会保留旧配对和当前选择。
 
@@ -14,11 +14,11 @@ NiriBridge 在两台运行 Niri 或 KDE Plasma 的 Ubuntu Wayland 电脑之间�
 
 **0.2 版新增原生桌面界面**，提供连接状态、开始与停止共享、配对、屏幕连接和输入设备设置。英文是源语言和回退语言，简体中文翻译完整。界面默认跟随系统语言，也可在设置中手动切换，保留未保存的编辑，不重启输入共享。
 
-当前源码为面向 Ubuntu 26.04、Niri 26.04 和 KDE Plasma 6.6 Wayland 的 1.0 候选版，多设备切换仍待实机验收，采用 **GPL-3.0-or-later**。完整条款见 [LICENSE](LICENSE)，依赖声明见[第三方许可清单](THIRD_PARTY_NOTICES.md)。
+**1.0.0** 是面向 Ubuntu 26.04、Linux x86_64 的首个正式版。Niri 26.04 共享和已保存设备的使用已通过实机验收；KDE Plasma 6.6 Wayland 后端已有早期基本键鼠实机验收及隔离 KWin/Portal 覆盖，本轮 1.0 未重复其硬件验收。项目采用 **GPL-3.0-or-later**，完整条款见 [LICENSE](LICENSE)，依赖声明见[第三方许可清单](THIRD_PARTY_NOTICES.md)。支持范围和验证边界见下文。
 
 ## 桌面界面
 
-从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-1.0.0-rc.2-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
+从 [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) 下载 Ubuntu 26.04 amd64 **`.deb` 软件包**，使用 `SHA256SUMS` 校验后，交给系统的软件包安装器打开，也可执行 `sudo apt install ./niri-bridge-1.0.0-ubuntu26.04-amd64.deb`。系统会安装所需依赖，完成后从应用启动器打开 **NiriBridge**。
 
 仍提供 x86_64 压缩包。安装[运行依赖](docs/setup.zh-CN.md)并解压后，以桌面用户执行：
 
@@ -95,4 +95,4 @@ GTK 界面通过仅限当前用户的私有 Unix socket 管理后端，不启动
 - [安全说明](SECURITY.zh-CN.md)
 - [需求与验收清单](docs/requirements.zh-CN.md)
 
-首个开发验证平台为 Ubuntu 26.04 和 Niri 26.04，其他合成器和操作系统尚未验证。项目通过 `rust-toolchain.toml` 固定 Rust 1.98.1。
+主要实机验证平台为 Ubuntu 26.04 和 Niri 26.04。KDE Plasma 6.6 Wayland 已有隔离测试覆盖，实机验证边界见测试说明；其他合成器和操作系统尚未验证。项目通过 `rust-toolchain.toml` 固定 Rust 1.98.1。

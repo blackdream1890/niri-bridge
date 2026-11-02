@@ -1,4 +1,4 @@
-# Saved devices and the 1.0 release candidate
+# Saved devices and the 1.0 release
 
 ## Confirmed scope
 
@@ -51,7 +51,7 @@ entry on a configured local display. Their connection address and screen
 connections are configured independently; an earlier peer's address is never
 reused as the new peer's address.
 
-## Acceptance and release gates
+## Acceptance record
 
 - [x] Retain legacy pairing and identity during migration (temporary-file tests).
 - [x] Save two distinct peers, including equal display names, without losing trust.
@@ -62,15 +62,25 @@ reused as the new peer's address.
 - [x] Failed selection and unacknowledged screen transactions retain the old configuration.
 - [x] Trust only the selected peer in loopback mutually authenticated TLS tests.
 - [x] Cover saved selection, unsaved drafts and language switching in GTK tests.
-- [ ] Switch away and back with independently saved addresses and screen connections in the installed package.
+- [x] Verify independent addresses and screen settings across switches in automated three-device fixtures, and retain earlier pairings during installed-device selection changes.
 - [x] Run ordinary Rust/Python checks and isolated compositor/coordinator regressions in the development snapshot.
-- [ ] Verify package installation, upgrade and retained device records.
-- [ ] Complete physical multi-device switching acceptance at an agreed time.
-- [ ] Review existing Niri/KDE acceptance limits and state the supported 1.0 scope.
+- [x] Verify candidate package installation, upgrade and retained device records.
+- [x] Confirm working sharing with different selected physical pairs and receive user acceptance of the current behavior.
+- [x] Review existing Niri/KDE acceptance limits and state the 1.0 validation scope.
 - [x] Verify current-source privacy, dependency audit and refreshed license notices.
-- [ ] Verify packaged corresponding source, offline rebuilding and checksums.
+- [x] Verify candidate corresponding source, offline rebuilding and checksums.
 
-## Candidate verification
+The installed-device record covers three Ubuntu Wayland workstations used in
+separate pairs, retained earlier peers, mutually authenticated connections,
+capture readiness and observed bidirectional control and physical takeover.
+The user confirmed normal operation and authorized the current 1.0 release.
+This does not claim an exhaustive physical matrix of every target switch,
+display layout, input method, gesture or suspend/recovery combination. Those
+remain part of continued hardware coverage. Earlier basic KDE/Niri keyboard and
+pointer acceptance is retained in the testing record. The current 1.0 physical
+rollout covers Niri; KDE hardware scenarios were not revalidated in this rollout.
+
+## Verification record
 
 The 1.0.0-rc.1 development snapshot passed formatting, strict Clippy, 66 ordinary
 Rust tests, 31 Python script tests, translation checks and 31 GTK tests in each
@@ -85,14 +95,20 @@ locked graph passes `cargo-audit audit --deny warnings`; license notices are
 regenerated and checked. Candidate 1 was then committed as `fb95ccf` and passed
 the clean-commit package pipeline, including archive and Debian installation,
 upgrade/removal smoke checks and an offline corresponding-source rebuild.
-Physical multi-device switching acceptance remains pending.
+Physical pair changes and user acceptance were subsequently recorded during
+the release-candidate rollout.
 
-Candidate 2 adds guided LAN permission review, copyable local addresses,
-unsaved-setting protection and invalid destination checks. Its exact source,
-package and interface checks must be completed again; the first candidate's
-results do not establish verification of these changes.
+Candidate 2 added guided LAN permission review, copyable local addresses,
+unsaved-setting protection and invalid destination checks. Its clean commit
+`01b8fc3` passed 71 ordinary Rust tests, 53 Python script tests, translation
+checks and 61 GTK tests in each language. The complete container pipeline also
+passed isolated kernel/libinput, KWin, Niri and encrypted coordinator suites,
+dependency audit and license checks, installation/upgrade/removal checks and
+an offline corresponding-source rebuild.
 
-The target is 1.0.0. Candidate packages do not establish physical acceptance or a
-stable release. Publish 1.0.0 only after the applicable gates pass, using the
-existing checked-source release pipeline. Compilation and isolated tests alone
-do not establish completion.
+Version 1.0.0 promotes that accepted behavior without a new input or pairing
+implementation. Its exact clean commit must pass the checked-source release
+pipeline again before publication. Verify the remote tag, source identity,
+downloaded checksums and release provenance before publishing the draft.
+Compilation and isolated tests do not replace the physical and human evidence
+recorded above.

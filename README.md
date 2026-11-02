@@ -6,7 +6,7 @@ Keep your keyboard and touchpad gestures with your pointer across Niri and KDE P
 
 NiriBridge shares keyboard, mouse and touchpad input between two Ubuntu Wayland computers running Niri or KDE Plasma. Each computer renders its own desktop. Move the pointer through a configured screen edge and the keyboard follows automatically; three-finger workspace switching and four-finger overview gestures follow the same destination.
 
-**The 1.0 release candidate remembers multiple paired computers.** Each keeps its
+**Version 1.0 remembers multiple paired computers.** Each keeps its
 certificate, fingerprint, address and screen connections. Choose one sharing
 target in Devices & pairing; switching stops sharing until you explicitly start
 it again. Adding a computer preserves earlier pairings and the current selection.
@@ -15,11 +15,11 @@ it again. Adding a computer preserves earlier pairings and the current selection
 
 **Version 0.2 adds a native desktop interface** with live connection status, Start/Stop sharing controls, pairing, screen arrangement and input preferences. English is the default interface language, with a complete Simplified Chinese catalog. The language follows your desktop by default and can be changed in Preferences without restarting input sharing or losing unsaved edits.
 
-This checkout is the 1.0 release candidate for Ubuntu 26.04 with Niri 26.04 or KDE Plasma 6.6 Wayland. Physical saved-device switching acceptance is pending. It is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
+Version **1.0.0** is the first stable release for Ubuntu 26.04 on Linux x86_64. Niri 26.04 sharing and saved-device use have physical acceptance. The KDE Plasma 6.6 Wayland backend has earlier basic keyboard/pointer acceptance and isolated KWin/Portal coverage; the 1.0 rollout has not repeated its hardware acceptance. The project is licensed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Supported behavior and remaining acceptance limits are documented below.
 
 ## Desktop interface
 
-Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-1.0.0-rc.2-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
+Download the Ubuntu 26.04 amd64 **`.deb` package** from [GitHub Releases](https://github.com/blackdream1890/niri-bridge/releases) and verify it against `SHA256SUMS`. Open it with your package installer, or run `sudo apt install ./niri-bridge-1.0.0-ubuntu26.04-amd64.deb`. Ubuntu resolves the runtime dependencies. Then open **NiriBridge** from your application launcher.
 
 The portable x86_64 archive remains available. After installing the [runtime dependencies](docs/setup.md), extract it and run as your desktop user:
 
@@ -103,4 +103,4 @@ Bidirectional input, native three/four-finger gestures and corrected touchpad re
 - [Security](SECURITY.md)
 - [Requirements and acceptance checklist](docs/requirements.md)
 
-The first supported development target is Ubuntu 26.04 with Niri 26.04. KDE Plasma 6.6 Wayland is the additional 0.3 beta target; see the test record for its current acceptance limits. Other compositors and operating systems have not been validated. The repository pins Rust 1.98.1 with `rust-toolchain.toml`.
+The primary physical validation target is Ubuntu 26.04 with Niri 26.04. KDE Plasma 6.6 Wayland has isolated test coverage; see the test record for its current acceptance limits. Other compositors and operating systems have not been validated. The repository pins Rust 1.98.1 with `rust-toolchain.toml`.
